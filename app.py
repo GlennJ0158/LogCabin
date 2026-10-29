@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from db import DB, FIELDS
+from db import DB, FIELDS, filter_fabric
 from planner import plan_panel, cut_list
 
 BOOL = {"Use", "Def"}
@@ -12,7 +12,7 @@ STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric"
           ("Dropdown", "FieldName"): ("Dropdown", "FieldName"),
           ("Helptext", "RecordName"): ("Helptext", "RecordName"),
           ("Helptext", "FieldName"): ("Helptext", "FieldName")}
-RETAIN = {("Dropdown", "RecordName"), ("Dropdown", "FieldName"),
+RETAIN = {("Fabric", "Length"), ("Fabric", "Width"), ("Dropdown", "RecordName"), ("Dropdown", "FieldName"),
           ("Helptext", "RecordName"), ("Helptext", "FieldName")}
 
 
@@ -71,7 +71,7 @@ class RecordForm(ttk.Frame):
         super().__init__(app.body)
         self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
-        self.vars, self.widgets, self.sel = {}, {}, None
+        self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
             ttk.Label(form, text=f.upper()).grid(row=i, column=0, sticky="e", padx=4, pady=2)
@@ -96,8 +96,10 @@ class RecordForm(ttk.Frame):
         for label, cmd in (("Add", self.add), ("Update", self.update), ("Delete", self.delete), ("Clear", self.clear)):
             b = ttk.Button(bar, text=label, command=cmd); b.pack(side="left", padx=2)
             self.attach_help(b, name, label)
+        if name == "Fabric":
+            self.build_filter()
         holder = ttk.Frame(self); holder.pack(fill="both", expand=True, padx=8, pady=8)
-        self.tree = ttk.Treeview(holder, columns=FIELDS[name], show="headings", height=12)
+        self.tree = ttk.Treeview(holder, columns=FIELDS[name], show="headings", height=12, selectmode="extended")
         for c in FIELDS[name]:
             wide = name == "Helptext" and c in ("HoverText", "FullHelp")
             self.tree.heading(c, text=c.upper()); self.tree.column(c, width=250 if wide else 90, stretch=not wide)
@@ -108,9 +110,63 @@ class RecordForm(ttk.Frame):
         hsb.grid(row=1, column=0, sticky="ew")
         holder.rowconfigure(0, weight=1); holder.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.select)
+        self.tree.bind("<Control-a>", lambda e: self.select_all() or "break")
         self.bind_errors = binding_errors(name, {f: (self.widgets.get(f), self.vars.get(f)) for f in self.fields})
         if self.bind_errors:
             messagebox.showerror("Binding error", "\n".join(self.bind_errors))
+
+    def build_filter(self):
+        box = ttk.LabelFrame(self, text="Filter")
+        box.pack(fill="x", padx=8, pady=4)
+        self.fvars = {k: tk.StringVar() for k in
+                      ("Name", "Type", "Grain", "LengthMin", "LengthMax", "WidthMin", "WidthMax", "Use")}
+        self.fvars["Use"].set("Any")
+        self.fcombos = {}
+        spec = (("Name", "Name contains", 14), ("Type", "Type", 10), ("Grain", "Grain", 10),
+                ("LengthMin", "Length min", 6), ("LengthMax", "max", 6),
+                ("WidthMin", "Width min", 6), ("WidthMax", "max", 6), ("Use", "Use", 5))
+        for i, (k, label, width) in enumerate(spec):
+            ttk.Label(box, text=label).grid(row=0, column=2 * i, padx=(6, 2))
+            if k in ("Type", "Grain"):
+                w = ttk.Combobox(box, textvariable=self.fvars[k], width=width)
+                self.fcombos[k] = w
+            elif k == "Use":
+                w = ttk.Combobox(box, textvariable=self.fvars[k], width=width, values=["Any", "Yes", "No"],
+                                 state="readonly")
+            else:
+                w = ttk.Entry(box, textvariable=self.fvars[k], width=width)
+            w.grid(row=0, column=2 * i + 1)
+            w.bind("<Return>", lambda e: self.refresh())
+        btns = ttk.Frame(box)
+        btns.grid(row=1, column=0, columnspan=16, sticky="w", pady=4)
+        for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
+                           ("Select All Shown", self.select_all)):
+            ttk.Button(btns, text=label, command=cmd).pack(side="left", padx=2)
+        self.shown = ttk.Label(btns, text="")
+        self.shown.pack(side="left", padx=8)
+
+    def clear_filter(self):
+        for k, v in self.fvars.items():
+            v.set("Any" if k == "Use" else "")
+        self.refresh()
+
+    def filter_criteria(self):
+        def num(k):
+            t = self.fvars[k].get().strip()
+            if not t:
+                return None
+            try:
+                return float(t)
+            except ValueError:
+                raise ValueError(f"Filter {k} must be a number")
+        use = {"Any": None, "Yes": True, "No": False}[self.fvars["Use"].get()]
+        return dict(name=self.fvars["Name"].get().strip(), type_=self.fvars["Type"].get().strip(),
+                    grain=self.fvars["Grain"].get().strip(), length_min=num("LengthMin"),
+                    length_max=num("LengthMax"), width_min=num("WidthMin"), width_max=num("WidthMax"),
+                    use=use)
+
+    def select_all(self):
+        self.tree.selection_set(self.tree.get_children())
 
     def attach_help(self, w, screen, field):
         hover, full = self.db.helptext(screen, field)
@@ -129,8 +185,18 @@ class RecordForm(ttk.Frame):
                 if err:
                     messagebox.showerror("Dropdown default", err)
         self.tree.delete(*self.tree.get_children())
-        for r in self.db.list(self.name):
+        rows = self.db.list(self.name)
+        if self.name == "Fabric":
+            for k, w in self.fcombos.items():
+                w["values"] = [""] + self.db.dropdown("Fabric", k)[0]
+            try:
+                rows = filter_fabric(rows, **self.filter_criteria())
+            except ValueError as e:
+                messagebox.showerror("Filter", str(e))
+            self.shown.config(text=f"{len(rows)} shown")
+        for r in rows:
             self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]])
+        self.sel, self.sels = None, []
         for f in self.fields:   # first-show defaults
             if not self.vars[f].get() and f not in BOOL and (self.name, f) in STATIC:
                 self.apply_default(f)
@@ -142,7 +208,8 @@ class RecordForm(ttk.Frame):
         self.vars[f].set(d or "")
 
     def clear(self):
-        self.sel = None
+        self.sel, self.sels = None, []
+        self.tree.selection_set(())
         for f in self.fields:
             if f in BOOL:
                 self.vars[f].set(True)
@@ -152,18 +219,27 @@ class RecordForm(ttk.Frame):
                 self.vars[f].set("")
 
     def select(self, _):
-        s = self.tree.selection()
-        if not s:
+        self.sels = [int(i) for i in self.tree.selection()]
+        if not self.sels:
+            self.sel = None
             return
-        self.sel = int(s[0])
-        row = [r for r in self.db.list(self.name) if r["ID"] == self.sel][0]
+        rows = {r["ID"]: r for r in self.db.list(self.name)}
+        chosen = [rows[i] for i in self.sels if i in rows]
+        self.sel = self.sels[0] if len(self.sels) == 1 else None
         for f in self.fields:
-            v = row[f.upper()]
-            self.vars[f].set(bool(v) if f in BOOL else ("" if v is None else v))
+            vals = {r[f.upper()] for r in chosen}
+            v = vals.pop() if len(vals) == 1 else None   # differing values show blank in a group
+            if f in BOOL:
+                self.vars[f].set(bool(v) if v is not None else True)
+            else:
+                self.vars[f].set("" if v is None else v)
+        self.initial = {f: self.vars[f].get() for f in self.fields}
 
-    def values(self):
+    def values(self, only=None):
         out = {}
         for f in self.fields:
+            if only is not None and f not in only:
+                continue
             v = self.vars[f].get()
             if f in BOOL:
                 v = 1 if v else 0
@@ -186,7 +262,7 @@ class RecordForm(ttk.Frame):
                 self.vars[f].set(True)
             elif (self.name, f) not in STATIC and (self.name, f) not in RETAIN and f != "Grain":
                 self.vars[f].set("")
-        self.sel = None
+        self.sel, self.sels = None, []
         self.refresh()
 
     def add(self):
@@ -197,17 +273,29 @@ class RecordForm(ttk.Frame):
         self.after_save()
 
     def update(self):
-        if self.sel is None:
+        if not self.sels:
             return messagebox.showinfo("Update", "Select a row first.")
+        group = len(self.sels) > 1
         try:
-            self.db.update(self.name, self.sel, **self.values())
+            if group:
+                changed = [f for f in self.fields if self.vars[f].get() != self.initial.get(f)]
+                if not changed:
+                    return messagebox.showinfo("Update", "No fields were changed.")
+                vals = self.values(only=changed)
+                if not messagebox.askyesno("Update group", f"Change {', '.join(changed)} on "
+                                           f"{len(self.sels)} records?"):
+                    return
+                self.db.update_many(self.name, self.sels, **vals)
+            else:
+                self.db.update(self.name, self.sels[0], **self.values())
         except Exception as e:
             return messagebox.showerror("Error", str(e))
         self.after_save()
 
     def delete(self):
-        if self.sel is not None and messagebox.askyesno("Delete", "Delete selected record?"):
-            self.db.delete(self.name, self.sel); self.after_save()
+        n = len(self.sels)
+        if n and messagebox.askyesno("Delete", "Delete selected record?" if n == 1 else f"Delete {n} selected records?"):
+            self.db.delete_many(self.name, self.sels); self.after_save()
 
 
 class PanelForm(ttk.Frame):

@@ -54,6 +54,31 @@ def helptext_pairs():
     return out
 
 
+def filter_fabric(rows, name="", type_="", grain="", length_min=None, length_max=None,
+                  width_min=None, width_max=None, use=None):
+    """Return the FABRIC rows matching every supplied criterion (blank/None = no restriction)."""
+    out = []
+    for r in rows:
+        if name and name.lower() not in (r["NAME"] or "").lower():
+            continue
+        if type_ and (r["TYPE"] or "").lower() != type_.lower():
+            continue
+        if grain and (r["GRAIN"] or "").lower() != grain.lower():
+            continue
+        if length_min is not None and r["LENGTH"] < length_min:
+            continue
+        if length_max is not None and r["LENGTH"] > length_max:
+            continue
+        if width_min is not None and r["WIDTH"] < width_min:
+            continue
+        if width_max is not None and r["WIDTH"] > width_max:
+            continue
+        if use is not None and bool(r["USE"]) != bool(use):
+            continue
+        out.append(r)
+    return out
+
+
 class DB:
     def __init__(self, path="quiltback.db"):
         self.c = sqlite3.connect(path)
@@ -106,6 +131,19 @@ class DB:
 
     def delete(self, table, id_):
         self.c.execute(f"DELETE FROM {table.upper()} WHERE ID=?", (id_,))
+        self.c.commit()
+
+    def update_many(self, table, ids, **vals):
+        """Apply the same column changes to every record in ids, atomically."""
+        if not ids or not vals:
+            return
+        sets = ",".join(f"{k}=?" for k in vals)
+        self.c.executemany(f"UPDATE {table.upper()} SET {sets} WHERE ID=?",
+                           [list(vals.values()) + [i] for i in ids])
+        self.c.commit()
+
+    def delete_many(self, table, ids):
+        self.c.executemany(f"DELETE FROM {table.upper()} WHERE ID=?", [(i,) for i in ids])
         self.c.commit()
 
     # dropdowns
