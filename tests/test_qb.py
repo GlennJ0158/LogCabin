@@ -19,9 +19,83 @@ class RecordFormText(unittest.TestCase):
         a = A(); a.db = DB(":memory:"); a.body = root
         f = RecordForm(a, "Helptext")
         self.assertIsInstance(f.widgets["FullHelp"], tk.Text)
+        f.vars["RecordName"].set("Fabric"); f.vars["FieldName"].set("Name")
         f.vars["FullHelp"].set("line1\nline2")
         self.assertEqual(f.values()["FULLHELP"], "line1\nline2")
         root.destroy()
+
+
+class BindingTests(unittest.TestCase):
+    def setUp(self):
+        try:
+            import tkinter as tk
+            self.root = tk.Tk()
+        except Exception:
+            self.skipTest("tkinter/display unavailable")
+        self.tk = tk
+        self.errors = []
+        import app
+        self.app_mod = app
+        self._orig = app.messagebox.showerror
+        app.messagebox.showerror = lambda t, m, **k: self.errors.append((t, m))
+
+    def tearDown(self):
+        self.app_mod.messagebox.showerror = self._orig
+        self.root.destroy()
+
+    def make(self, name):
+        class A: pass
+        a = A(); a.db = DB(":memory:"); a.body = self.root
+        return self.app_mod.RecordForm(a, name)
+
+    def test_every_record_field_is_bound_to_typed_input(self):
+        from tkinter import ttk
+        for name in ("Fabric", "Dropdown", "Helptext"):
+            f = self.make(name)
+            self.assertEqual(f.bind_errors, [], name)
+            for fld, w in f.widgets.items():
+                if isinstance(w, ttk.Checkbutton):
+                    w.invoke()
+                    self.assertFalse(f.vars[fld].get(), f"{name}.{fld}")
+                elif isinstance(w, self.tk.Text):
+                    w.insert("1.0", "typed?")
+                    self.assertEqual(f.vars[fld].get(), "typed?", f"{name}.{fld}")
+                else:
+                    w.delete(0, "end"); w.insert(0, "5" if fld in ("Length", "Width") else "typed?")
+                    self.assertEqual(f.vars[fld].get(), w.get(), f"{name}.{fld}")
+                    self.assertEqual(f.vars[fld].get(), "5" if fld in ("Length", "Width") else "typed?")
+        self.assertEqual(self.errors, [])
+
+    def test_fabric_name_and_hover_text_reach_values(self):
+        f = self.make("Fabric")
+        f.widgets["Name"].insert(0, "Rose?"); f.widgets["Length"].insert(0, "3"); f.widgets["Width"].insert(0, "2")
+        self.assertEqual(f.values()["NAME"], "Rose?")
+        h = self.make("Helptext")
+        h.widgets["RecordName"].set("Fabric"); h.widgets["FieldName"].set("Name")
+        h.widgets["HoverText"].insert(0, "Hover?")
+        self.assertEqual(h.values()["HOVERTEXT"], "Hover?")
+
+    def test_unbound_widget_is_reported(self):
+        from tkinter import ttk
+        v = self.tk.StringVar(); w = ttk.Entry(self.root)
+        errs = self.app_mod.binding_errors("X", {"F": (w, v)})
+        self.assertEqual(len(errs), 1)
+        self.assertTrue(self.app_mod.binding_errors("X", {"F": (None, v)}))
+
+    def test_bad_number_gives_error_message(self):
+        f = self.make("Fabric")
+        f.widgets["Name"].insert(0, "a"); f.widgets["Length"].insert(0, "abc"); f.widgets["Width"].insert(0, "2")
+        with self.assertRaisesRegex(ValueError, "Length must be a number"):
+            f.values()
+
+    def test_panel_fields_bound(self):
+        a = type("A", (), {})(); a.db = DB(":memory:"); a.body = self.root
+        p = self.app_mod.PanelForm(a)
+        self.assertEqual(p.bind_errors, [])
+        for k, e in p.entries.items():
+            e.delete(0, "end"); e.insert(0, "7")
+            self.assertEqual(p.v[k].get(), "7", k)
+        self.assertEqual(self.errors, [])
 
 
 class T(unittest.TestCase):
@@ -35,6 +109,15 @@ class T(unittest.TestCase):
         self.db.add("DROPDOWN", RECORDNAME="Fabric", FIELDNAME="Type", VALUE="Y", DEF=1)
         _, d, e = self.db.dropdown("Fabric", "Type")
         self.assertEqual(d, "Y"); self.assertTrue(e)
+
+    def test_fabric_name_and_hover_text_keep_question_marks(self):
+        name = "What's this?"
+        hover = "Is this fabric right?"
+        self.db.add("FABRIC", NAME=name, LENGTH=5, WIDTH=4)
+        self.db.add("HELPTEXT", RECORDNAME="Fabric", FIELDNAME="Name", HOVERTEXT=hover)
+
+        self.assertEqual(self.db.list("FABRIC")[-1]["NAME"], name)
+        self.assertEqual(self.db.helptext("Fabric", "Name")[0], hover)
 
     def test_plan_and_approve(self):
         a = self.db.add("FABRIC", NAME="a", LENGTH=20, WIDTH=20)

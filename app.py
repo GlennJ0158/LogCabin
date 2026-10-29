@@ -45,6 +45,26 @@ class TextVar:
         self.text.delete("1.0", "end"); self.text.insert("1.0", value)
 
 
+def binding_errors(label, pairs):
+    """pairs: {field: (widget, var)}. Return a message per field whose widget is not bound to its variable."""
+    errs = []
+    for f, (w, v) in pairs.items():
+        if v is None or w is None:
+            errs.append(f"{label}.{f}: no variable/widget defined")
+        elif isinstance(v, TextVar):
+            if v.text is not w:
+                errs.append(f"{label}.{f}: text widget is not bound to its variable")
+        else:
+            opt = "variable" if isinstance(w, (ttk.Checkbutton, tk.Checkbutton)) else "textvariable"
+            try:
+                bound = str(w.cget(opt))
+            except tk.TclError:
+                bound = ""
+            if bound != str(v):
+                errs.append(f"{label}.{f}: widget is not bound to its variable")
+    return errs
+
+
 class RecordForm(ttk.Frame):
     """Generic maintenance form for FABRIC, DROPDOWN or HELPTEXT."""
     def __init__(self, app, name):
@@ -67,7 +87,7 @@ class RecordForm(ttk.Frame):
                 w.grid(row=0, column=0); sb.grid(row=0, column=1, sticky="ns")
                 box.grid(row=i, column=1, sticky="w")
             else:
-                v = tk.StringVar(); w = ttk.Entry(form, width=60 if (name, f) == ("Helptext", "HoverText") else 30)
+                v = tk.StringVar(); w = ttk.Entry(form, textvariable=v, width=60 if (name, f) == ("Helptext", "HoverText") else 30)
             if not isinstance(v, TextVar):
                 w.grid(row=i, column=1, sticky="w")
             self.vars[f], self.widgets[f] = v, w
@@ -88,17 +108,16 @@ class RecordForm(ttk.Frame):
         hsb.grid(row=1, column=0, sticky="ew")
         holder.rowconfigure(0, weight=1); holder.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.select)
+        self.bind_errors = binding_errors(name, {f: (self.widgets.get(f), self.vars.get(f)) for f in self.fields})
+        if self.bind_errors:
+            messagebox.showerror("Binding error", "\n".join(self.bind_errors))
 
     def attach_help(self, w, screen, field):
         hover, full = self.db.helptext(screen, field)
         Tip(w, hover)
         w.bind("<F1>", lambda e: self.show_full(screen, field))
-        w.bind("<KeyRelease-question>", lambda e: self.show_full(screen, field, strip=True))
 
-    def show_full(self, screen, field, strip=False):
-        w = self.widgets.get(field)
-        if strip and w is not None and isinstance(self.vars[field].get(), str):
-            self.vars[field].set(self.vars[field].get().replace("?", ""))
+    def show_full(self, screen, field):
         hover, full = self.db.helptext(screen, field)
         messagebox.showinfo(f"{screen}.{field}", full or hover or "No help available.")
 
@@ -149,7 +168,10 @@ class RecordForm(ttk.Frame):
             if f in BOOL:
                 v = 1 if v else 0
             elif f in ("Length", "Width"):
-                v = float(v)
+                try:
+                    v = float(v)
+                except (TypeError, ValueError):
+                    raise ValueError(f"{f} must be a number")
                 if v <= 0:
                     raise ValueError(f"{f} must be positive")
             elif f in ("Name", "RecordName", "FieldName", "Value") and not str(v).strip():
@@ -193,17 +215,22 @@ class PanelForm(ttk.Frame):
         super().__init__(app.body)
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
+        self.entries = {}
         self.v = {k: tk.StringVar(value=d) for k, d in
                   (("PANELNAME", ""), ("SEAMALLOWANCE", "0.25"), ("LENGTH", ""), ("WIDTH", ""))}
         for i, (k, var) in enumerate(self.v.items()):
             ttk.Label(top, text=k).grid(row=0, column=2 * i)
             e = ttk.Entry(top, textvariable=var, width=12); e.grid(row=0, column=2 * i + 1, padx=4)
+            self.entries[k] = e
             Tip(e, self.db.helptext("Panel", k)[0])
             e.bind("<F1>", lambda ev, k=k: messagebox.showinfo(k, self.db.helptext("Panel", k)[1] or "No help."))
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
         for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve)):
             b = ttk.Button(bar, text=label, command=cmd); b.pack(side="left", padx=2)
             Tip(b, self.db.helptext("Panel", label)[0])
+        self.bind_errors = binding_errors("Panel", {k: (self.entries.get(k), self.v.get(k)) for k in self.v})
+        if self.bind_errors:
+            messagebox.showerror("Binding error", "\n".join(self.bind_errors))
         self.text = tk.Text(self, height=8); self.text.pack(fill="x", padx=8, pady=4)
         self.canvas = tk.Canvas(self, width=500, height=400, bg="white"); self.canvas.pack(padx=8, pady=4)
 
@@ -212,8 +239,13 @@ class PanelForm(ttk.Frame):
 
     def build(self):
         try:
-            panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", "SEAMALLOWANCE": float(self.v["SEAMALLOWANCE"].get()),
-                     "LENGTH": float(self.v["LENGTH"].get()), "WIDTH": float(self.v["WIDTH"].get())}
+            nums = {}
+            for k in ("SEAMALLOWANCE", "LENGTH", "WIDTH"):
+                try:
+                    nums[k] = float(self.v[k].get())
+                except ValueError:
+                    raise ValueError(f"{k} must be a number")
+            panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", **nums}
             if min(panel["LENGTH"], panel["WIDTH"]) <= 0 or panel["SEAMALLOWANCE"] < 0:
                 raise ValueError("Dimensions must be positive")
             self.plan = plan_panel(panel, self.db.list("FABRIC")); self.plan_id = None
