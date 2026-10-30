@@ -4,7 +4,7 @@ import os
 import tempfile
 import webbrowser
 
-from planner import part_label
+from planner import GRAIN_MARK, GRAIN_MEANING, part_label
 
 
 def render_plan_html(plan):
@@ -18,6 +18,9 @@ def render_plan_html(plan):
         f"<tr><td>{n}</td><td>#{c['fabric_id']}</td><td>{html.escape(str(c['name']))}</td>"
         f"<td>{c['cut_length']:g} x {c['cut_width']:g}</td><td>{'Yes' if c['rotated'] else 'No'}</td></tr>"
         for n, c in enumerate(plan["cuts"], 1))
+    used = [k for k in GRAIN_MARK if any((p.get("grain") or "n") == k for p in plan["parts"])]
+    legend = "".join(f"<tr><td><b>{html.escape(GRAIN_MARK[k])}</b></td><td>{GRAIN_MEANING[k]}</td></tr>"
+                     for k in used)
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Cutting plan - {html.escape(str(plan['panel']))}</title>
 <style>body{{font-family:sans-serif}}table{{border-collapse:collapse}}
@@ -27,6 +30,7 @@ td,th{{border:1px solid #888;padding:3px 8px}}</style></head><body>
 {len(plan['parts'])} parts ({plan['rows']} x {plan['cols']}); seams: {plan['seams']}</p>
 <table><tr><th>#</th><th>Fabric</th><th>Name</th><th>Cut size (L x W)</th><th>Rotated</th></tr>{rows}</table>
 <svg width="{plan['width'] * s + 20:.0f}" height="{plan['length'] * s + 20:.0f}" style="margin-top:16px">{''.join(rects)}</svg>
+<h3>Legend</h3><table>{legend}</table>
 <script>window.onload=function(){{window.print();}}</script></body></html>"""
 
 

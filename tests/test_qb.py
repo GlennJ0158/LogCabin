@@ -231,6 +231,10 @@ class T(unittest.TestCase):
         self.assertIn("p&amp;q", out)
         self.assertIn("&lt;b&gt;a&lt;/b&gt;", out)
         self.assertIn("<rect", out)
+        self.assertIn("Legend", out)
+        self.assertIn("No grain specified", out)
+        self.assertNotIn("Bias grain", out)
+        self.assertLess(out.index("</svg>"), out.index("Legend"))
 
     def test_all_buttons_have_helptext_and_dropdown_entries(self):
         want = [(r, f) for r, f in __import__("db").helptext_pairs()]

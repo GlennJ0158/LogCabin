@@ -95,6 +95,10 @@ def grain_direction(grain, rotated):
 GRAIN_MARK = {"h": "==>", "v": "^|", "b": "^\\", "n": "<N>"}
 
 
+GRAIN_MEANING = {"h": "Grain runs right to left", "v": "Grain runs up and down",
+                 "b": "Bias grain (diagonal)", "n": "No grain specified"}
+
+
 def part_label(part):
     """Sketch label: grain indicator, fabric name and ID."""
     mark = GRAIN_MARK[part.get("grain") or "n"]
