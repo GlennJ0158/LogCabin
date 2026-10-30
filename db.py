@@ -16,6 +16,9 @@ FIELDS = {
 PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
+FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown"]
+NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
+NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
 SEED_HOVER = "Seeding, No Help (Hover)"
 SEED_FULL = "(Fullhelp) Seeding None"
 
@@ -44,6 +47,8 @@ def helptext_pairs():
     for rec in RECORDS:  # RecordForm buttons
         pairs += [(rec, b) for b in RECORD_BUTTONS]
     pairs += [("Panel", b) for b in PANEL_BUTTONS]  # PanelForm buttons
+    pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
+    pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
 
     seen, out = set(), []
     for r, f in pairs:  # de-dupe, keep order
@@ -87,16 +92,28 @@ class DB:
         if not self.c.execute("SELECT 1 FROM DROPDOWN").fetchone():
             self._seed()
         self.seed_helptext()
+        self.seed_helptext_dropdowns()
 
     def _seed(self):
         rows = list(BASE_DROPDOWNS)
         rows.append(("Dropdown", "RecordName", RECORDS))
         rows.append(("Dropdown", "FieldName", [f for r in RECORDS for f in FIELDS[r][1:]]))
-        rows.append(("Helptext", "RecordName", RECORDS))
-        rows.append(("Helptext", "FieldName", [f for r in RECORDS for f in FIELDS[r][1:]]))
         for rec, fld, vals in rows:
             for v in vals:
                 self.c.execute("INSERT INTO DROPDOWN(RECORDNAME,FIELDNAME,VALUE) VALUES(?,?,?)", (rec, fld, v))
+        self.c.commit()
+
+    def seed_helptext_dropdowns(self):
+        """Idempotently make every HELPTEXT record/field name selectable (forms, fields and buttons)."""
+        pairs = helptext_pairs()
+        recs = list(dict.fromkeys(r for r, _ in pairs))
+        flds = list(dict.fromkeys(f for _, f in pairs))
+        for fld, vals in (("RecordName", recs), ("FieldName", flds)):
+            for v in vals:
+                self.c.execute(
+                    "INSERT INTO DROPDOWN(RECORDNAME,FIELDNAME,VALUE) SELECT 'Helptext',?,? WHERE NOT EXISTS ("
+                    "SELECT 1 FROM DROPDOWN WHERE UPPER(RECORDNAME)='HELPTEXT' AND UPPER(FIELDNAME)=UPPER(?) "
+                    "AND UPPER(VALUE)=UPPER(?))", (fld, v, fld, v))
         self.c.commit()
 
     def seed_helptext(self):

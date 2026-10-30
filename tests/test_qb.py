@@ -232,6 +232,21 @@ class T(unittest.TestCase):
         self.assertIn("&lt;b&gt;a&lt;/b&gt;", out)
         self.assertIn("<rect", out)
 
+    def test_all_buttons_have_helptext_and_dropdown_entries(self):
+        want = [(r, f) for r, f in __import__("db").helptext_pairs()]
+        for r, b in (("Navigation", "Fabric"), ("Navigation", "Panel"), ("Navigation", "Dropdown"),
+                     ("Navigation", "Helptext"), ("Fabric", "Apply Filter"), ("Fabric", "Clear Filter"),
+                     ("Fabric", "Select All Shown"), ("Panel", "Print Plan"), ("Helptext", "Add")):
+            self.assertIn((r, b), want)
+        have = {(x["RECORDNAME"].upper(), x["FIELDNAME"].upper()) for x in self.db.list("HELPTEXT")}
+        self.assertTrue({(r.upper(), f.upper()) for r, f in want} <= have)
+        recs = self.db.dropdown("Helptext", "RecordName")[0]
+        self.assertIn("Navigation", recs)
+        self.assertIn("Panel", recs)
+        self.assertIn("Apply Filter", self.db.dropdown("Helptext", "FieldName")[0])
+        self.db.seed_helptext_dropdowns()   # idempotent
+        self.assertEqual(self.db.dropdown("Helptext", "RecordName")[0], recs)
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])

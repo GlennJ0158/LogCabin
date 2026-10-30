@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from db import DB, FIELDS, filter_fabric
+from db import DB, FIELDS, NAV_RECORD, filter_fabric
 from planner import plan_panel, cut_list
 from printing import print_plan
 
@@ -142,7 +142,8 @@ class RecordForm(ttk.Frame):
         btns.grid(row=1, column=0, columnspan=16, sticky="w", pady=4)
         for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
                            ("Select All Shown", self.select_all)):
-            ttk.Button(btns, text=label, command=cmd).pack(side="left", padx=2)
+            b = ttk.Button(btns, text=label, command=cmd); b.pack(side="left", padx=2)
+            self.attach_help(b, self.name, label)
         self.shown = ttk.Label(btns, text="")
         self.shown.pack(side="left", padx=8)
 
@@ -318,6 +319,7 @@ class PanelForm(ttk.Frame):
                            ("Print Plan", self.print)):
             b = ttk.Button(bar, text=label, command=cmd); b.pack(side="left", padx=2)
             Tip(b, self.db.helptext("Panel", label)[0])
+            b.bind("<F1>", lambda e, label=label: messagebox.showinfo(label, self.db.helptext("Panel", label)[1] or "No help."))
         self.bind_errors = binding_errors("Panel", {k: (self.entries.get(k), self.v.get(k)) for k in self.v})
         if self.bind_errors:
             messagebox.showerror("Binding error", "\n".join(self.bind_errors))
@@ -398,6 +400,8 @@ class App(tk.Tk):
                       "Dropdown": RecordForm(self, "Dropdown"), "Helptext": RecordForm(self, "Helptext")}
         for n in self.forms:
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
+            Tip(b, self.db.helptext(NAV_RECORD, n)[0])
+            b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
 
     def show(self, name):
