@@ -223,6 +223,15 @@ class T(unittest.TestCase):
         self.db.approve_plan(self.db.save_plan(1, plan))
         self.assertEqual(self.db.list("FABRIC")[0]["LENGTH"], 19)
 
+    def test_render_plan_html(self):
+        from printing import render_plan_html
+        self.db.add("FABRIC", NAME="<b>a</b>", LENGTH=20, WIDTH=20)
+        plan = plan_panel(dict(PANELNAME="p&q", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
+        out = render_plan_html(plan)
+        self.assertIn("p&amp;q", out)
+        self.assertIn("&lt;b&gt;a&lt;/b&gt;", out)
+        self.assertIn("<rect", out)
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])

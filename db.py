@@ -14,7 +14,7 @@ FIELDS = {
 }
 
 PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
-PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan"]
+PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
 SEED_HOVER = "Seeding, No Help (Hover)"
 SEED_FULL = "(Fullhelp) Seeding None"

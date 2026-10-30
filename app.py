@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox
 
 from db import DB, FIELDS, filter_fabric
 from planner import plan_panel, cut_list
+from printing import print_plan
 
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
@@ -313,7 +314,8 @@ class PanelForm(ttk.Frame):
             Tip(e, self.db.helptext("Panel", k)[0])
             e.bind("<F1>", lambda ev, k=k: messagebox.showinfo(k, self.db.helptext("Panel", k)[1] or "No help."))
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
-        for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve)):
+        for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve),
+                           ("Print Plan", self.print)):
             b = ttk.Button(bar, text=label, command=cmd); b.pack(side="left", padx=2)
             Tip(b, self.db.helptext("Panel", label)[0])
         self.bind_errors = binding_errors("Panel", {k: (self.entries.get(k), self.v.get(k)) for k in self.v})
@@ -365,6 +367,14 @@ class PanelForm(ttk.Frame):
                           LENGTH=self.plan["length"], WIDTH=self.plan["width"])
         self.plan_id = self.db.save_plan(pid, self.plan)
         messagebox.showinfo("Save", "Cutting plan saved.")
+
+    def print(self):
+        if not self.plan:
+            return messagebox.showinfo("Print", "Build a plan first.")
+        try:
+            print_plan(self.plan)
+        except Exception as e:
+            messagebox.showerror("Print", str(e))
 
     def approve(self):
         if self.plan_id is None:
