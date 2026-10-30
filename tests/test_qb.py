@@ -275,7 +275,11 @@ class T(unittest.TestCase):
         self.assertEqual(grain_direction("Lengthwise", True), "h")
         self.assertEqual(grain_direction("Crosswise", False), "h")
         self.assertEqual(grain_direction("Crosswise", True), "v")
-        self.assertIsNone(grain_direction("Bias", False))
+        self.assertEqual(grain_direction("Bias", True), "b")
+        for g in (None, "", "None"):
+            self.assertEqual(grain_direction(g, False), "n")
+        from planner import GRAIN_MARK
+        self.assertEqual((GRAIN_MARK["b"], GRAIN_MARK["n"]), ("^\\", "<N>"))
         self.db.add("FABRIC", NAME="Rose", GRAIN="Lengthwise", LENGTH=20, WIDTH=20)
         plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
         self.assertEqual(part_label(plan["parts"][0]), "^| Rose (#1)")

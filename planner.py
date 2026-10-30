@@ -81,21 +81,23 @@ def plan_panel(panel, fabrics, max_parts=None):
 
 
 def grain_direction(grain, rotated):
-    """'h' (right to left), 'v' (up and down) or None (bias/unspecified).
+    """'h' (right to left), 'v' (up and down), 'b' (bias) or 'n' (None/blank/unrecognized).
     Lengthwise grain runs along the fabric length, which is vertical on the panel unless the cut is rotated."""
-    g = (grain or "").lower()
+    g = (grain or "").strip().lower()
+    if g == "bias":
+        return "b"
     if g not in ("lengthwise", "crosswise"):
-        return None
+        return "n"
     vertical = (g == "lengthwise") != bool(rotated)
     return "v" if vertical else "h"
 
 
-GRAIN_MARK = {"h": "==>", "v": "^|", None: ""}
+GRAIN_MARK = {"h": "==>", "v": "^|", "b": "^\\", "n": "<N>"}
 
 
 def part_label(part):
     """Sketch label: grain indicator, fabric name and ID."""
-    mark = GRAIN_MARK[part.get("grain")]
+    mark = GRAIN_MARK[part.get("grain") or "n"]
     return f"{mark} {part.get('name', '')} (#{part['fabric_id']})".strip()
 
 
