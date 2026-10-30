@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from db import DB, FIELDS, NAV_RECORD, filter_fabric, sort_rows
-from planner import plan_panel, cut_list
+from planner import plan_panel, cut_list, part_label
 from printing import print_plan
 
 BOOL = {"Use", "Def"}
@@ -360,7 +360,7 @@ class PanelForm(ttk.Frame):
         for part in p["parts"]:
             x0, y0 = 20 + part["x"] * s, 20 + part["y"] * s
             c.create_rectangle(x0, y0, x0 + part["w"] * s, y0 + part["h"] * s, fill="#cfe8ff")
-            c.create_text(x0 + part["w"] * s / 2, y0 + part["h"] * s / 2, text=f"Fabric #{part['fabric_id']}")
+            c.create_text(x0 + part["w"] * s / 2, y0 + part["h"] * s / 2, text=part_label(part), width=part["w"] * s - 4, justify="center")
 
     def save(self):
         if not self.plan:

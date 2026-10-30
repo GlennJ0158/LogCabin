@@ -269,6 +269,17 @@ class T(unittest.TestCase):
         z = [(r["USE"], r["HOVERTEXT"]) for r in sort_rows("Helptext", d.list("HELPTEXT")) if r["RECORDNAME"] == "Zz"]
         self.assertEqual(z, [(1, "y"), (0, "x")])
 
+    def test_grain_indicator(self):
+        from planner import grain_direction, part_label
+        self.assertEqual(grain_direction("Lengthwise", False), "v")
+        self.assertEqual(grain_direction("Lengthwise", True), "h")
+        self.assertEqual(grain_direction("Crosswise", False), "h")
+        self.assertEqual(grain_direction("Crosswise", True), "v")
+        self.assertIsNone(grain_direction("Bias", False))
+        self.db.add("FABRIC", NAME="Rose", GRAIN="Lengthwise", LENGTH=20, WIDTH=20)
+        plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
+        self.assertEqual(part_label(plan["parts"][0]), "^| Rose (#1)")
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])

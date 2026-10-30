@@ -4,6 +4,8 @@ import os
 import tempfile
 import webbrowser
 
+from planner import part_label
+
 
 def render_plan_html(plan):
     s = min(460 / plan["width"], 360 / plan["length"])
@@ -11,7 +13,7 @@ def render_plan_html(plan):
     for p in plan["parts"]:
         x, y, w, h = 10 + p["x"] * s, 10 + p["y"] * s, p["w"] * s, p["h"] * s
         rects.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" fill="#cfe8ff" stroke="#000"/>'
-                     f'<text x="{x + w / 2:.1f}" y="{y + h / 2:.1f}" text-anchor="middle">Fabric #{p["fabric_id"]}</text>')
+                     f'<text x="{x + w / 2:.1f}" y="{y + h / 2:.1f}" text-anchor="middle">{html.escape(part_label(p))}</text>')
     rows = "".join(
         f"<tr><td>{n}</td><td>#{c['fabric_id']}</td><td>{html.escape(str(c['name']))}</td>"
         f"<td>{c['cut_length']:g} x {c['cut_width']:g}</td><td>{'Yes' if c['rotated'] else 'No'}</td></tr>"

@@ -70,13 +70,33 @@ def plan_panel(panel, fabrics, max_parts=None):
         for n in range(take):
             r, c = divmod(i, cols)
             i += 1
-            parts.append({"row": r, "col": c, "x": c * cw, "y": r * cl, "w": cw, "h": cl, "fabric_id": f["ID"]})
+            parts.append({"row": r, "col": c, "x": c * cw, "y": r * cl, "w": cw, "h": cl, "fabric_id": f["ID"],
+                          "name": f["NAME"], "grain": grain_direction(f["GRAIN"], rot)})
             cuts.append({"fabric_id": f["ID"], "name": f["NAME"], "cut_length": nl if not rot else nw,
                          "cut_width": nw if not rot else nl,
                          "consumed_length": consumed if n == 0 else 0,   # fabric's total, charged once
                          "rotated": rot})
     return {"panel": panel["PANELNAME"], "length": pl, "width": pw, "seam_allowance": sa,
             "rows": rows, "cols": cols, "seams": (rows - 1) + (cols - 1), "parts": parts, "cuts": cuts}
+
+
+def grain_direction(grain, rotated):
+    """'h' (right to left), 'v' (up and down) or None (bias/unspecified).
+    Lengthwise grain runs along the fabric length, which is vertical on the panel unless the cut is rotated."""
+    g = (grain or "").lower()
+    if g not in ("lengthwise", "crosswise"):
+        return None
+    vertical = (g == "lengthwise") != bool(rotated)
+    return "v" if vertical else "h"
+
+
+GRAIN_MARK = {"h": "==>", "v": "^|", None: ""}
+
+
+def part_label(part):
+    """Sketch label: grain indicator, fabric name and ID."""
+    mark = GRAIN_MARK[part.get("grain")]
+    return f"{mark} {part.get('name', '')} (#{part['fabric_id']})".strip()
 
 
 def cut_list(plan):
