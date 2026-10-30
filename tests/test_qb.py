@@ -197,6 +197,32 @@ class T(unittest.TestCase):
         self.assertEqual(plan["seams"], 1)
         self.assertEqual(len(plan["cuts"]), 2)
 
+    def test_more_than_two_fabrics(self):
+        for n in "abc":
+            self.db.add("FABRIC", NAME=n, LENGTH=4, WIDTH=12)
+        panel = dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10, MAXPARTS=3)
+        plan = plan_panel(panel, self.db.list("FABRIC"))
+        self.assertEqual(len(plan["parts"]), 3)
+        self.assertEqual(len({c["fabric_id"] for c in plan["cuts"]}), 3)
+
+    def test_max_parts_limits_parts(self):
+        for n in "abc":
+            self.db.add("FABRIC", NAME=n, LENGTH=4, WIDTH=12)
+        panel = dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10)
+        with self.assertRaises(ValueError):
+            plan_panel(panel, self.db.list("FABRIC"), max_parts=2)
+        with self.assertRaises(ValueError):
+            plan_panel(panel, self.db.list("FABRIC"), max_parts=0)
+
+    def test_one_fabric_supplies_several_parts_and_approves(self):
+        fid = self.db.add("FABRIC", NAME="long", LENGTH=40, WIDTH=6)
+        panel = dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10, MAXPARTS=4)
+        plan = plan_panel(panel, self.db.list("FABRIC"))
+        self.assertEqual(plan["seams"], 1)
+        self.assertEqual(sum(c["consumed_length"] for c in plan["cuts"]), 21)
+        self.db.approve_plan(self.db.save_plan(1, plan))
+        self.assertEqual(self.db.list("FABRIC")[0]["LENGTH"], 19)
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])

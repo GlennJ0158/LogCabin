@@ -13,7 +13,7 @@ FIELDS = {
     "Helptext": ["Id", "RecordName", "FieldName", "HoverText", "FullHelp", "Use"],
 }
 
-PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width"]
+PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
 SEED_HOVER = "Seeding, No Help (Hover)"

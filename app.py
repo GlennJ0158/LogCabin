@@ -305,7 +305,7 @@ class PanelForm(ttk.Frame):
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}
         self.v = {k: tk.StringVar(value=d) for k, d in
-                  (("PANELNAME", ""), ("SEAMALLOWANCE", "0.25"), ("LENGTH", ""), ("WIDTH", ""))}
+                  (("PANELNAME", ""), ("SEAMALLOWANCE", "0.25"), ("LENGTH", ""), ("WIDTH", ""), ("MAXPARTS", "4"))}
         for i, (k, var) in enumerate(self.v.items()):
             ttk.Label(top, text=k).grid(row=0, column=2 * i)
             e = ttk.Entry(top, textvariable=var, width=12); e.grid(row=0, column=2 * i + 1, padx=4)
@@ -333,6 +333,12 @@ class PanelForm(ttk.Frame):
                     nums[k] = float(self.v[k].get())
                 except ValueError:
                     raise ValueError(f"{k} must be a number")
+            try:
+                nums["MAXPARTS"] = int(self.v["MAXPARTS"].get())
+            except ValueError:
+                raise ValueError("MAXPARTS must be a whole number")
+            if nums["MAXPARTS"] < 1:
+                raise ValueError("MAXPARTS must be at least 1")
             panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", **nums}
             if min(panel["LENGTH"], panel["WIDTH"]) <= 0 or panel["SEAMALLOWANCE"] < 0:
                 raise ValueError("Dimensions must be positive")
