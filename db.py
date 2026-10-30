@@ -9,7 +9,7 @@ BASE_DROPDOWNS = [
 RECORDS = ["Fabric", "Dropdown", "Helptext"]
 FIELDS = {
     "Fabric": ["Id", "Name", "Type", "Grain", "Length", "Width", "Use"],
-    "Dropdown": ["Id", "RecordName", "FieldName", "Value", "Def", "Use"],
+    "Dropdown": ["Id", "RecordName", "FieldName", "Def", "Value", "Use"],
     "Helptext": ["Id", "RecordName", "FieldName", "HoverText", "FullHelp", "Use"],
 }
 
@@ -173,7 +173,9 @@ class DB:
         err = None
         if len(defs) > 1:
             err = f"Multiple defaults for {record}.{field}: {', '.join(defs)}. Using '{defs[-1]}'."
-        return [r["VALUE"] for r in rows], (defs[-1] if defs else None), err
+        # list order: default value(s) first (Def), then Value alphabetically
+        ordered = sorted(rows, key=lambda r: (not r["DEF"], r["VALUE"].lower()))
+        return [r["VALUE"] for r in ordered], (defs[-1] if defs else None), err
 
     # help
     def helptext(self, record, field):

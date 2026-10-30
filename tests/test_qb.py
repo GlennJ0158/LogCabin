@@ -247,6 +247,14 @@ class T(unittest.TestCase):
         self.db.seed_helptext_dropdowns()   # idempotent
         self.assertEqual(self.db.dropdown("Helptext", "RecordName")[0], recs)
 
+    def test_dropdown_sorted_def_then_value_and_column_order(self):
+        from db import FIELDS
+        self.assertEqual(FIELDS["Dropdown"][1:5], ["RecordName", "FieldName", "Def", "Value"])
+        self.db.add("DROPDOWN", RECORDNAME="Fabric", FIELDNAME="Type", VALUE="Zed", DEF=1)
+        vals, d, _ = self.db.dropdown("Fabric", "Type")
+        self.assertEqual(vals[0], "Zed")
+        self.assertEqual(vals[1:], sorted(vals[1:], key=str.lower))
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])
