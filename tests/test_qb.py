@@ -98,6 +98,17 @@ class BindingTests(unittest.TestCase):
         self.assertEqual(self.errors, [])
 
 
+class VersionTests(BindingTests):
+    def test_version_label_first_on_every_form(self):
+        from version import LABEL
+        import app
+        class A: pass
+        a = A(); a.db = DB(":memory:"); a.body = self.root
+        for form in (app.RecordForm(a, "Fabric"), app.RecordForm(a, "Dropdown"),
+                     app.RecordForm(a, "Helptext"), app.PanelForm(a)):
+            self.assertEqual(form.winfo_children()[0].cget("text"), LABEL)
+
+
 class GroupTests(BindingTests):
     def setUp(self):
         super().setUp()
@@ -287,6 +298,13 @@ class T(unittest.TestCase):
         self.db.add("FABRIC", NAME="Rose", GRAIN="Lengthwise", LENGTH=20, WIDTH=20)
         plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
         self.assertEqual(part_label(plan["parts"][0]), "^| Rose (#1)")
+
+    def test_version_on_print_page(self):
+        from printing import render_plan_html
+        from version import LABEL
+        self.db.add("FABRIC", NAME="a", LENGTH=20, WIDTH=20)
+        plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
+        self.assertLess(render_plan_html(plan).index(LABEL), render_plan_html(plan).index("<h1>"))
 
     def test_impossible(self):
         with self.assertRaises(ValueError):

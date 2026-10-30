@@ -5,6 +5,7 @@ from tkinter import ttk, messagebox
 from db import DB, FIELDS, NAV_RECORD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
+from version import LABEL
 
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
@@ -70,6 +71,7 @@ class RecordForm(ttk.Frame):
     """Generic maintenance form for FABRIC, DROPDOWN or HELPTEXT."""
     def __init__(self, app, name):
         super().__init__(app.body)
+        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
@@ -303,6 +305,7 @@ class RecordForm(ttk.Frame):
 class PanelForm(ttk.Frame):
     def __init__(self, app):
         super().__init__(app.body)
+        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}
@@ -392,7 +395,7 @@ class PanelForm(ttk.Frame):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("QuiltBack"); self.geometry("820x780")
+        self.title(LABEL); self.geometry("820x780")
         self.db = DB()
         nav = ttk.Frame(self); nav.pack(fill="x")
         self.body = ttk.Frame(self); self.body.pack(fill="both", expand=True)

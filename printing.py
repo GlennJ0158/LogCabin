@@ -4,6 +4,7 @@ import os
 import tempfile
 import webbrowser
 
+from version import LABEL
 from planner import GRAIN_MARK, GRAIN_MEANING, part_label
 
 
@@ -25,6 +26,7 @@ def render_plan_html(plan):
 <title>Cutting plan - {html.escape(str(plan['panel']))}</title>
 <style>body{{font-family:sans-serif}}table{{border-collapse:collapse}}
 td,th{{border:1px solid #888;padding:3px 8px}}</style></head><body>
+<div style="font-size:small;color:#666">{LABEL}</div>
 <h1>{html.escape(str(plan['panel']))}</h1>
 <p>Finished size {plan['length']:g} x {plan['width']:g}; seam allowance {plan['seam_allowance']:g};
 {len(plan['parts'])} parts ({plan['rows']} x {plan['cols']}); seams: {plan['seams']}</p>
