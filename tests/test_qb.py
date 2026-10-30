@@ -255,6 +255,20 @@ class T(unittest.TestCase):
         self.assertEqual(vals[0], "Zed")
         self.assertEqual(vals[1:], sorted(vals[1:], key=str.lower))
 
+    def test_display_sorts(self):
+        from db import sort_rows
+        d = self.db
+        d.add("FABRIC", NAME="b", TYPE="Cotton", LENGTH=5, WIDTH=5, USE=0)
+        d.add("FABRIC", NAME="b", TYPE="Linen", LENGTH=5, WIDTH=5)
+        d.add("FABRIC", NAME="a", TYPE="Linen", LENGTH=9, WIDTH=5)
+        d.add("FABRIC", NAME="a", TYPE="Linen", LENGTH=3, WIDTH=5)
+        got = [(r["USE"], r["NAME"], r["LENGTH"]) for r in sort_rows("Fabric", d.list("FABRIC"))]
+        self.assertEqual(got, [(1, "a", 3), (1, "a", 9), (1, "b", 5), (0, "b", 5)])
+        d.add("HELPTEXT", RECORDNAME="Zz", FIELDNAME="A", HOVERTEXT="x", USE=0)
+        d.add("HELPTEXT", RECORDNAME="Zz", FIELDNAME="A", HOVERTEXT="y", USE=1)
+        z = [(r["USE"], r["HOVERTEXT"]) for r in sort_rows("Helptext", d.list("HELPTEXT")) if r["RECORDNAME"] == "Zz"]
+        self.assertEqual(z, [(1, "y"), (0, "x")])
+
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])

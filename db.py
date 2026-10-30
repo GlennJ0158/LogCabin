@@ -59,6 +59,26 @@ def helptext_pairs():
     return out
 
 
+def _txt(v):
+    return str(v if v is not None else "").lower()
+
+
+# display sort per record: (field, descending) in priority order
+SORTS = {
+    "Fabric": [("USE", True), ("TYPE", False), ("NAME", False), ("LENGTH", False), ("WIDTH", False)],
+    "Helptext": [("RECORDNAME", False), ("FIELDNAME", False), ("USE", True), ("HOVERTEXT", False)],
+}
+
+
+def sort_rows(name, rows):
+    """Order rows for display per SORTS (stable multi-key sort, text case-insensitive)."""
+    rows = list(rows)
+    for fld, desc in reversed(SORTS.get(name, [])):
+        rows.sort(key=lambda r: (r[fld] or 0) if isinstance(r[fld], (int, float)) or r[fld] is None
+                  else _txt(r[fld]), reverse=desc)
+    return rows
+
+
 def filter_fabric(rows, name="", type_="", grain="", length_min=None, length_max=None,
                   width_min=None, width_max=None, use=None):
     """Return the FABRIC rows matching every supplied criterion (blank/None = no restriction)."""

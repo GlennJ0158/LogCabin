@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from db import DB, FIELDS, NAV_RECORD, filter_fabric
+from db import DB, FIELDS, NAV_RECORD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list
 from printing import print_plan
 
@@ -196,7 +196,7 @@ class RecordForm(ttk.Frame):
             except ValueError as e:
                 messagebox.showerror("Filter", str(e))
             self.shown.config(text=f"{len(rows)} shown")
-        for r in rows:
+        for r in sort_rows(self.name, rows):
             self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]])
         self.sel, self.sels = None, []
         for f in self.fields:   # first-show defaults
