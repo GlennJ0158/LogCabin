@@ -1,7 +1,7 @@
 import os, sys, unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from db import DB
-from planner import plan_panel
+from planner import plan_panel, plan_cases
 
 
 class RecordFormText(unittest.TestCase):
@@ -349,6 +349,20 @@ class T(unittest.TestCase):
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])
+
+    def test_plan_cases_symmetric_and_variable(self):
+        scraps = [(64, 40), (11, 40), (7, 40), (7, 40), (6, 40), (54, 40)]
+        for w, l in scraps:
+            self.db.add("FABRIC", NAME=f"S{w}x{l}", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=l, WIDTH=w, USE=1)
+        panel = dict(PANELNAME="p", SEAMALLOWANCE=.5, LENGTH=80, WIDTH=60, MAXPARTS=17)
+        cases = plan_cases(panel, self.db.list("FABRIC"), max_parts=17)
+        self.assertIsNone(cases["symmetric"])
+        self.assertEqual(cases["variable"]["mode"], "strip")
+        # with a grid that fits, both cases are produced and the symmetric one is the grid
+        self.db.add("FABRIC", NAME="Big", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=100, WIDTH=100, USE=1)
+        cases = plan_cases(dict(PANELNAME="q", SEAMALLOWANCE=0, LENGTH=20, WIDTH=20), self.db.list("FABRIC"), max_parts=4)
+        self.assertEqual(cases["symmetric"]["mode"], "grid")
+        self.assertEqual(cases["variable"]["mode"], "strip")
 
     def test_strip_fallback_when_grid_fails(self):
         # 80x60 panel: no equal-cell grid fits these scraps, but a band layout does

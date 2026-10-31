@@ -3,8 +3,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
 
-from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, filter_fabric, sort_rows
-from planner import plan_panel, cut_list, part_label
+from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, PANEL_CASE_FIELD, PANEL_CASES, filter_fabric, sort_rows
+from planner import plan_cases, cut_list, part_label
 from printing import print_plan, render_manual_html, open_for_print
 from version import LABEL, VERSION
 
@@ -331,6 +331,7 @@ class PanelForm(ttk.Frame):
         super().__init__(app.body)
         ttk.Label(self, text=f"v{VERSION}  Panel", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
+        self.cases = {}
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}
         self.v = {k: tk.StringVar(value=d) for k, d in
@@ -348,6 +349,17 @@ class PanelForm(ttk.Frame):
         self.sel_box.grid(row=1, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
         Tip(self.sel_box, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[0])
         self.sel_box.bind("<F1>", lambda ev: messagebox.showinfo(PANEL_SELECTION_FIELD, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[1] or "No help."))
+        ttk.Label(top, text=PANEL_CASE_FIELD).grid(row=2, column=0, pady=(6, 0))
+        case_row = ttk.Frame(top); case_row.grid(row=2, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
+        self.case_var = tk.StringVar(value=PANEL_CASES[0])
+        self.case_btns = {}
+        for c in PANEL_CASES:
+            rb = ttk.Radiobutton(case_row, text=c, value=c, variable=self.case_var, command=self.switch_case)
+            rb.pack(side="left", padx=4)
+            rb.state(["disabled"])
+            Tip(rb, self.db.helptext("Panel", c)[0])
+            rb.bind("<F1>", lambda ev, c=c: messagebox.showinfo(c, self.db.helptext("Panel", c)[1] or "No help."))
+            self.case_btns[c] = rb
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
         for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve),
                            ("Print Plan", self.print)):
@@ -385,11 +397,29 @@ class PanelForm(ttk.Frame):
                 raise ValueError("Dimensions must be positive")
             chosen = self.sel_var.get()
             fabrics = self.db.fabrics_in_set(self.set_ids[chosen]) if chosen in self.set_ids else self.db.list("FABRIC")
-            self.plan = plan_panel(panel, fabrics); self.plan_id = None
+            self.cases = plan_cases(panel, fabrics); self.plan_id = None
         except ValueError as e:
             return messagebox.showerror("Plan", str(e))
-        self.text.delete("1.0", "end")
-        self.text.insert("end", f"Seams: {self.plan['seams']}\n{cut_list(self.plan)}")
+        if not any(self.cases.values()):
+            return messagebox.showerror("Plan", f"Cannot build panel with {nums['MAXPARTS']} or fewer parts from available inventory")
+        self.case_var.set(PANEL_CASES[0] if self.cases["symmetric"] else PANEL_CASES[1])
+        for c in PANEL_CASES:
+            self.case_btns[c].state(["!disabled" if self.cases[c.lower()] else "disabled"])
+        self.show_case()
+
+    def switch_case(self):
+        self.plan_id = None
+        self.show_case()
+
+    def show_case(self):
+        """Display the plan for the selected case; a saved plan must be saved again after switching."""
+        label = self.case_var.get()
+        self.plan = self.cases.get(label.lower())
+        self.text.delete("1.0", "end"); self.canvas.delete("all")
+        if self.plan is None:
+            self.text.insert("end", f"{label} layout is not possible with the available inventory.")
+            return
+        self.text.insert("end", f"Case: {label}\nSeams: {self.plan['seams']}\n{cut_list(self.plan)}")
         self.draw()
 
     def draw(self):
@@ -403,11 +433,11 @@ class PanelForm(ttk.Frame):
 
     def save(self):
         if not self.plan:
-            return messagebox.showinfo("Save", "Build a plan first.")
+            return messagebox.showinfo("Save", "Build a plan first, or choose a case that is possible.")
         pid = self.db.add("PANEL", PANELNAME=self.plan["panel"], SEAMALLOWANCE=self.plan["seam_allowance"],
                           LENGTH=self.plan["length"], WIDTH=self.plan["width"])
         self.plan_id = self.db.save_plan(pid, self.plan)
-        messagebox.showinfo("Save", "Cutting plan saved.")
+        messagebox.showinfo("Save", f"{self.case_var.get()} cutting plan saved.")
 
     def print(self):
         if not self.plan:

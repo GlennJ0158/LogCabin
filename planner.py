@@ -38,18 +38,41 @@ def _assign(avail, need_l, need_w, count):
     return picks if left <= 0 else None
 
 
-def plan_panel(panel, fabrics, max_parts=None):
-    """panel: dict(PANELNAME, SEAMALLOWANCE, LENGTH, WIDTH[, MAXPARTS]). fabrics: FABRIC rows.
-    Builds the panel from equal cells in a rows x cols grid with at most max_parts cells (default 4),
-    preferring the fewest seams. A fabric may supply several cells. Raises ValueError if impossible."""
+def _prepare(panel, fabrics, max_parts):
     if max_parts is None:
         max_parts = panel.get("MAXPARTS", 4)
     max_parts = int(max_parts)
     if max_parts < 1:
         raise ValueError("Maximum parts must be at least 1")
+    return max_parts, [f for f in fabrics if f["USE"]]
+
+
+def plan_panel(panel, fabrics, max_parts=None):
+    """panel: dict(PANELNAME, SEAMALLOWANCE, LENGTH, WIDTH[, MAXPARTS]). fabrics: FABRIC rows.
+    Builds the panel from equal cells in a rows x cols grid with at most max_parts cells (default 4),
+    preferring the fewest seams. A fabric may supply several cells. Falls back to variable-width strips.
+    Raises ValueError if impossible."""
+    max_parts, avail = _prepare(panel, fabrics, max_parts)
+    grid = _plan_grid(panel, avail, max_parts)
+    if grid is not None:
+        return grid
+    strip = _plan_strips(panel, avail, max_parts)
+    if strip is not None:
+        return strip
+    raise ValueError(f"Cannot build panel with {max_parts} or fewer parts from available inventory")
+
+
+def plan_cases(panel, fabrics, max_parts=None):
+    """Both layouts for the same panel: {"symmetric": plan or None, "variable": plan or None}."""
+    max_parts, avail = _prepare(panel, fabrics, max_parts)
+    return {"symmetric": _plan_grid(panel, avail, max_parts),
+            "variable": _plan_strips(panel, avail, max_parts)}
+
+
+def _plan_grid(panel, avail, max_parts):
+    """Equal-cell (symmetric) layout, or None if no grid fits."""
     sa = panel["SEAMALLOWANCE"]
     pl, pw = panel["LENGTH"], panel["WIDTH"]
-    avail = [f for f in fabrics if f["USE"]]
     best = None
     for rows in range(1, max_parts + 1):
         for cols in range(1, max_parts // rows + 1):
@@ -63,10 +86,7 @@ def plan_panel(panel, fabrics, max_parts=None):
             if best is None or key < best[0]:
                 best = (key, rows, cols, picks, cl, cw, need_l, need_w)
     if best is None:
-        strip = _plan_strips(panel, avail, max_parts)
-        if strip is not None:
-            return strip
-        raise ValueError(f"Cannot build panel with {max_parts} or fewer parts from available inventory")
+        return None
     _, rows, cols, picks, cl, cw, nl, nw = best
     parts, cuts, i = [], [], 0
     for f, rot, take, consumed in picks:

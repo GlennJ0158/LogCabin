@@ -24,6 +24,8 @@ FILTER_FIELDS = ["FilterName", "FilterType", "FilterGrain", "FilterLengthMin", "
                  "FilterWidthMin", "FilterWidthMax", "FilterUse"]  # FABRIC filter inputs (keys = app.py fvars)
 FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text in the UI)
 PANEL_SELECTION_FIELD = "Selection"   # Panel page dropdown: saved selection used to build the plan
+PANEL_CASE_FIELD = "Case"   # Panel page layout choice: symmetric (equal cells) or variable (strips)
+PANEL_CASES = ["Symmetric", "Variable"]
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
 FILE_BUTTONS = ["Export CSV", "Import CSV", "User Manual"]   # top-bar buttons: CSV transfer and manual
@@ -62,6 +64,7 @@ def helptext_pairs():
     pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
     pairs += [("Fabric", f) for f in FABRIC_SET_FIELDS]  # FABRIC selection-save title
     pairs += [("Panel", PANEL_SELECTION_FIELD)]  # PANEL saved-selection dropdown
+    pairs += [("Panel", PANEL_CASE_FIELD)] + [("Panel", c) for c in PANEL_CASES]  # layout case choice
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
     pairs += [(NAV_RECORD, b) for b in FILE_BUTTONS]  # CSV export/import buttons
 
