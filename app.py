@@ -1,12 +1,14 @@
 """QuiltBack: fabric inventory and panel builder (Tkinter + SQLite). Run: python app.py"""
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
+import sqlite3
 
-from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, filter_fabric, sort_rows
+from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
-from version import LABEL
+from version import LABEL, VERSION
 
+ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
@@ -71,7 +73,7 @@ class RecordForm(ttk.Frame):
     """Generic maintenance form for FABRIC, DROPDOWN or HELPTEXT."""
     def __init__(self, app, name):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+        ttk.Label(self, text=f"v{VERSION}  {name}", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
@@ -101,6 +103,7 @@ class RecordForm(ttk.Frame):
             self.attach_help(b, name, label)
         if name == "Fabric":
             self.build_filter()
+            self.build_save_set()
         holder = ttk.Frame(self); holder.pack(fill="both", expand=True, padx=8, pady=8)
         self.tree = ttk.Treeview(holder, columns=FIELDS[name], show="headings", height=12, selectmode="extended")
         for c in FIELDS[name]:
@@ -149,6 +152,26 @@ class RecordForm(ttk.Frame):
             self.attach_help(b, self.name, label)
         self.shown = ttk.Label(btns, text="")
         self.shown.pack(side="left", padx=8)
+
+    def build_save_set(self):
+        box = ttk.LabelFrame(self, text="Save Selection")
+        box.pack(fill="x", padx=8, pady=4)
+        ttk.Label(box, text="TITLE").grid(row=0, column=0, padx=(6, 2), pady=4)
+        self.set_title = tk.StringVar()
+        entry = ttk.Entry(box, textvariable=self.set_title, width=40)
+        entry.grid(row=0, column=1, padx=2, sticky="w")
+        self.attach_help(entry, self.name, "Title")
+        b = ttk.Button(box, text="Save Selection", command=self.save_selection)
+        b.grid(row=0, column=2, padx=6)
+        self.attach_help(b, self.name, "Save Selection")
+
+    def save_selection(self):
+        try:
+            self.db.save_fabric_set(self.set_title.get(), self.sels)
+        except ValueError as e:
+            return messagebox.showerror("Save Selection", str(e))
+        self.set_title.set("")
+        messagebox.showinfo("Save Selection", f"Saved {len(self.sels)} fabric record(s).")
 
     def clear_filter(self):
         for k, v in self.fvars.items():
@@ -306,7 +329,7 @@ class RecordForm(ttk.Frame):
 class PanelForm(ttk.Frame):
     def __init__(self, app):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+        ttk.Label(self, text=f"v{VERSION}  Panel", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}
@@ -318,6 +341,13 @@ class PanelForm(ttk.Frame):
             self.entries[k] = e
             Tip(e, self.db.helptext("Panel", k)[0])
             e.bind("<F1>", lambda ev, k=k: messagebox.showinfo(k, self.db.helptext("Panel", k)[1] or "No help."))
+        ttk.Label(top, text=PANEL_SELECTION_FIELD).grid(row=1, column=0, pady=(6, 0))
+        self.set_ids = {}
+        self.sel_var = tk.StringVar(value=ALL_FABRICS)
+        self.sel_box = ttk.Combobox(top, textvariable=self.sel_var, state="readonly", width=40)
+        self.sel_box.grid(row=1, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
+        Tip(self.sel_box, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[0])
+        self.sel_box.bind("<F1>", lambda ev: messagebox.showinfo(PANEL_SELECTION_FIELD, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[1] or "No help."))
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
         for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve),
                            ("Print Plan", self.print)):
@@ -331,7 +361,10 @@ class PanelForm(ttk.Frame):
         self.canvas = tk.Canvas(self, width=500, height=400, bg="white"); self.canvas.pack(padx=8, pady=4)
 
     def refresh(self):
-        pass
+        self.set_ids = {f"{s['ID']} - {s['TITLE']}": s["ID"] for s in self.db.list("FABRICSET")}
+        self.sel_box["values"] = [ALL_FABRICS] + list(self.set_ids)
+        if self.sel_var.get() not in self.sel_box["values"]:
+            self.sel_var.set(ALL_FABRICS)
 
     def build(self):
         try:
@@ -350,7 +383,9 @@ class PanelForm(ttk.Frame):
             panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", **nums}
             if min(panel["LENGTH"], panel["WIDTH"]) <= 0 or panel["SEAMALLOWANCE"] < 0:
                 raise ValueError("Dimensions must be positive")
-            self.plan = plan_panel(panel, self.db.list("FABRIC")); self.plan_id = None
+            chosen = self.sel_var.get()
+            fabrics = self.db.fabrics_in_set(self.set_ids[chosen]) if chosen in self.set_ids else self.db.list("FABRIC")
+            self.plan = plan_panel(panel, fabrics); self.plan_id = None
         except ValueError as e:
             return messagebox.showerror("Plan", str(e))
         self.text.delete("1.0", "end")
@@ -406,7 +441,41 @@ class App(tk.Tk):
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, n)[0])
             b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
+        for label, cmd in zip(FILE_BUTTONS, (self.export_csv, self.import_csv)):
+            b = ttk.Button(nav, text=label, command=cmd); b.pack(side="right", padx=2, pady=2)
+            Tip(b, self.db.helptext(NAV_RECORD, label)[0])
+            b.bind("<F1>", lambda e, n=label: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
+
+    def export_csv(self):
+        folder = filedialog.askdirectory(title="Export all records to folder")
+        if not folder:
+            return
+        try:
+            files = self.db.export_csv(folder)
+        except OSError as e:
+            return messagebox.showerror("Export CSV", str(e))
+        messagebox.showinfo("Export CSV", f"Exported {len(files)} tables to:\n{folder}")
+
+    def import_csv(self):
+        folder = filedialog.askdirectory(title="Import records from folder")
+        if not folder:
+            return
+        if not messagebox.askyesno("Import CSV", "Rows whose ID already exists will be overwritten. Continue?"):
+            return
+        try:
+            summary = self.db.import_csv(folder)
+        except (OSError, ValueError, sqlite3.Error) as e:
+            return messagebox.showerror("Import CSV", str(e))
+        for f in self.forms.values():
+            f.refresh()
+        lines = [f"{'Table':<10}{'Input':>8}{'Added':>8}{'Modified':>10}"]
+        for t, s in summary.items():
+            if s["found"]:
+                lines.append(f"{t:<10}{s['input']:>8}{s['added']:>8}{s['modified']:>10}")
+            else:
+                lines.append(f"{t:<10}  no file, skipped")
+        messagebox.showinfo("Import CSV", "\n".join(lines))
 
     def show(self, name):
         for f in self.forms.values():
