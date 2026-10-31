@@ -342,6 +342,33 @@ class T(unittest.TestCase):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])
 
+    def test_strip_fallback_when_grid_fails(self):
+        # 80x60 panel: no equal-cell grid fits these scraps, but a band layout does
+        scraps = [(64, 40), (11, 40), (7, 40), (7, 40), (6, 40), (54, 40)]  # (width, length)
+        for w, l in scraps:
+            self.db.add("FABRIC", NAME=f"S{w}x{l}", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=l, WIDTH=w, USE=1)
+        panel = dict(PANELNAME="p", SEAMALLOWANCE=.5, LENGTH=80, WIDTH=60, MAXPARTS=17)
+        plan = plan_panel(panel, self.db.list("FABRIC"), max_parts=17)
+        self.assertEqual(plan["mode"], "strip")
+        self.assertLessEqual(len(plan["parts"]), 17)
+        # every band spans the full panel width and finished heights sum to the panel length
+        self.assertAlmostEqual(sum(p["h"] for p in plan["parts"] if p["col"] == 0), 80)
+        for r in {p["row"] for p in plan["parts"]}:
+            row = [p for p in plan["parts"] if p["row"] == r]
+            self.assertAlmostEqual(sum(p["w"] for p in row), 60)
+        # each fabric's cut length stays within its length
+        used = {}
+        for c in plan["cuts"]:
+            used[c["fabric_id"]] = max(used.get(c["fabric_id"], 0), c["cut_length"])
+        for f in self.db.list("FABRIC"):
+            self.assertLessEqual(used.get(f["ID"], 0), f["LENGTH"] + 1e-9)
+
+    def test_grid_preferred_when_feasible(self):
+        self.db.add("FABRIC", NAME="a", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=6, WIDTH=12, USE=1)
+        self.db.add("FABRIC", NAME="b", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=6, WIDTH=12, USE=1)
+        plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
+        self.assertEqual(plan["mode"], "grid")
+
     def test_save_selection_title_and_ids(self):
         import json
         from db import helptext_pairs
