@@ -17,6 +17,8 @@ PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
 FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown"]
+FILTER_FIELDS = ["FilterName", "FilterType", "FilterGrain", "FilterLengthMin", "FilterLengthMax",
+                 "FilterWidthMin", "FilterWidthMax", "FilterUse"]  # FABRIC filter inputs (keys = app.py fvars)
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
 SEED_HOVER = "Seeding, No Help (Hover)"
@@ -47,6 +49,7 @@ def helptext_pairs():
     for rec in RECORDS:  # RecordForm buttons
         pairs += [(rec, b) for b in RECORD_BUTTONS]
     pairs += [("Panel", b) for b in PANEL_BUTTONS]  # PanelForm buttons
+    pairs += [("Fabric", f) for f in FILTER_FIELDS]  # FABRIC filter inputs
     pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
 
