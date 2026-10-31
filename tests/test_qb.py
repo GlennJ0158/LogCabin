@@ -369,6 +369,36 @@ class T(unittest.TestCase):
         plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
         self.assertEqual(plan["mode"], "grid")
 
+    def test_csv_export_import_round_trip(self):
+        import tempfile
+        from db import CSV_TABLES
+        self.db.add("FABRIC", NAME="Rose, \"red\"", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=20, WIDTH=44, USE=1)
+        self.db.add("FABRIC", NAME="Blue", LENGTH=3.5, WIDTH=40, USE=0)
+        self.db.save_fabric_set("Set A", [1, 2])
+        self.db.add("PANEL", PANELNAME="P1", SEAMALLOWANCE=.25, LENGTH=80, WIDTH=60)
+        with tempfile.TemporaryDirectory() as d:
+            files = self.db.export_csv(d)
+            self.assertEqual(len(files), len(CSV_TABLES))
+            fresh = DB(":memory:")
+            counts = fresh.import_csv(d)
+            self.assertEqual(counts["FABRIC"], 2)
+            for t in CSV_TABLES:
+                self.assertEqual(fresh.list(t), self.db.list(t), t)
+            # re-import is an upsert by ID: no duplicate rows
+            fresh.import_csv(d)
+            self.assertEqual(len(fresh.list("FABRIC")), 2)
+
+    def test_csv_import_rejects_bad_header_without_changes(self):
+        import os, tempfile
+        self.db.add("FABRIC", NAME="Keep", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=5, WIDTH=5, USE=1)
+        before = self.db.list("FABRIC")
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "QuiltBack_FABRIC.csv"), "w", encoding="utf-8") as fh:
+                fh.write("ID,NAME,BOGUS\n9,New,1\n")
+            with self.assertRaises(ValueError):
+                self.db.import_csv(d)
+        self.assertEqual(self.db.list("FABRIC"), before)
+
     def test_save_selection_title_and_ids(self):
         import json
         from db import helptext_pairs

@@ -1,8 +1,9 @@
 """QuiltBack: fabric inventory and panel builder (Tkinter + SQLite). Run: python app.py"""
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
+import sqlite3
 
-from db import DB, FIELDS, NAV_RECORD, filter_fabric, sort_rows
+from db import DB, FIELDS, NAV_RECORD, FILE_BUTTONS, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
 from version import LABEL
@@ -426,7 +427,36 @@ class App(tk.Tk):
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, n)[0])
             b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
+        for label, cmd in zip(FILE_BUTTONS, (self.export_csv, self.import_csv)):
+            b = ttk.Button(nav, text=label, command=cmd); b.pack(side="right", padx=2, pady=2)
+            Tip(b, self.db.helptext(NAV_RECORD, label)[0])
+            b.bind("<F1>", lambda e, n=label: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
+
+    def export_csv(self):
+        folder = filedialog.askdirectory(title="Export all records to folder")
+        if not folder:
+            return
+        try:
+            files = self.db.export_csv(folder)
+        except OSError as e:
+            return messagebox.showerror("Export CSV", str(e))
+        messagebox.showinfo("Export CSV", f"Exported {len(files)} tables to:\n{folder}")
+
+    def import_csv(self):
+        folder = filedialog.askdirectory(title="Import records from folder")
+        if not folder:
+            return
+        if not messagebox.askyesno("Import CSV", "Rows whose ID already exists will be overwritten. Continue?"):
+            return
+        try:
+            counts = self.db.import_csv(folder)
+        except (OSError, ValueError, sqlite3.Error) as e:
+            return messagebox.showerror("Import CSV", str(e))
+        for f in self.forms.values():
+            f.refresh()
+        summary = ", ".join(f"{t} {n}" for t, n in counts.items()) or "no QuiltBack_*.csv files found"
+        messagebox.showinfo("Import CSV", f"Imported rows: {summary}")
 
     def show(self, name):
         for f in self.forms.values():

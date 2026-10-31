@@ -1,5 +1,7 @@
 """SQLite data layer for QuiltBack: FABRIC, DROPDOWN, HELPTEXT, PANEL and cutting plans."""
+import csv
 import json
+import os
 import sqlite3
 
 BASE_DROPDOWNS = [
@@ -20,6 +22,8 @@ FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Save Sele
 FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text in the UI)
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
+FILE_BUTTONS = ["Export CSV", "Import CSV"]   # top-bar buttons for all-records CSV transfer
+CSV_TABLES = ["PANEL", "FABRIC", "DROPDOWN", "HELPTEXT", "FABRICSET", "CUTPLAN"]
 SEED_HOVER = "Seeding, No Help (Hover)"
 SEED_FULL = "(Fullhelp) Seeding None"
 
@@ -53,6 +57,7 @@ def helptext_pairs():
     pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
     pairs += [("Fabric", f) for f in FABRIC_SET_FIELDS]  # FABRIC selection-save title
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
+    pairs += [(NAV_RECORD, b) for b in FILE_BUTTONS]  # CSV export/import buttons
 
     seen, out = set(), []
     for r, f in pairs:  # de-dupe, keep order
@@ -205,7 +210,7 @@ class DB:
         r = self.c.execute(
             "SELECT HOVERTEXT, FULLHELP FROM HELPTEXT WHERE UPPER(RECORDNAME)=UPPER(?) AND UPPER(FIELDNAME)=UPPER(?) "
             "AND USE=1 ORDER BY ID DESC", (record, field)).fetchone()
-        return (r["HOVERTEXT"], r["FULLHELP"]) if r else ("", "")
+        return (r["HOVERTEXT"] or "", r["FULLHELP"] or "") if r else ("", "")
 
     # fabric selections
     def save_fabric_set(self, title, fabric_ids):
@@ -216,6 +221,78 @@ class DB:
         if not ids:
             raise ValueError("Select at least one fabric record")
         return self.add("FABRICSET", TITLE=title.strip(), FABRICIDS=json.dumps(ids))
+
+    # CSV transfer: one file per table, named QuiltBack_<TABLE>.csv
+    def _columns(self, table):
+        """Return (name, declared_type, not_null) triples for table, in column order."""
+        return [(r["name"], (r["type"] or "").upper(), bool(r["notnull"]))
+                for r in self.c.execute(f"PRAGMA table_info({table})")]
+
+    def export_csv(self, folder):
+        os.makedirs(folder, exist_ok=True)
+        written = []
+        for t in CSV_TABLES:
+            cols = [n for n, _, _ in self._columns(t)]
+            path = os.path.join(folder, f"QuiltBack_{t}.csv")
+            with open(path, "w", newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                w.writerow(cols)
+                for r in self.c.execute(f"SELECT {','.join(cols)} FROM {t} ORDER BY ID"):
+                    w.writerow(["" if v is None else v for v in r])
+            written.append(path)
+        return written
+
+    def import_csv(self, folder):
+        """Upsert every QuiltBack_<TABLE>.csv found in folder, matching rows by ID. All-or-nothing.
+        Returns {table: rows_imported}. Raises ValueError on bad columns or values."""
+        counts = {}
+        try:
+            for t in CSV_TABLES:
+                path = os.path.join(folder, f"QuiltBack_{t}.csv")
+                if not os.path.exists(path):
+                    continue
+                types = {cname: (ctype, cnn) for cname, ctype, cnn in self._columns(t)}
+                with open(path, newline="", encoding="utf-8") as fh:
+                    reader = csv.DictReader(fh)
+                    unknown = [c for c in (reader.fieldnames or []) if c not in types]
+                    if unknown or "ID" not in (reader.fieldnames or []):
+                        raise ValueError(f"{os.path.basename(path)}: header must include ID and only known columns "
+                                         f"(bad: {', '.join(unknown) or 'ID missing'})")
+                    n = 0
+                    for raw in reader:
+                        row = {k: self._csv_value(v, *types[k]) for k, v in raw.items()}
+                        self._upsert(t, row)
+                        n += 1
+                counts[t] = n
+            self.c.commit()
+        except Exception:
+            self.c.rollback()
+            raise
+        return counts
+
+    @staticmethod
+    def _csv_value(text, decl_type, not_null):
+        """Blank cells: NULL, except NOT NULL text columns keep ''. Numeric blanks become NULL."""
+        if text == "":
+            return "" if ("TEXT" in decl_type and not_null) else None
+        return text
+
+    def _upsert(self, table, row):
+        if row.get("ID") in (None, ""):
+            row = {k: v for k, v in row.items() if k != "ID"}
+            self.c.execute(f"INSERT INTO {table}({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                           list(row.values()))
+            return
+        id_ = int(row["ID"])
+        row["ID"] = id_
+        exists = self.c.execute(f"SELECT 1 FROM {table} WHERE ID=?", (id_,)).fetchone()
+        others = {k: v for k, v in row.items() if k != "ID"}
+        if exists:
+            sets = ",".join(f"{k}=?" for k in others)
+            self.c.execute(f"UPDATE {table} SET {sets} WHERE ID=?", list(others.values()) + [id_])
+        else:
+            self.c.execute(f"INSERT INTO {table}({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                           list(row.values()))
 
     # plans
     def save_plan(self, panel_id, plan):
