@@ -101,6 +101,7 @@ class RecordForm(ttk.Frame):
             self.attach_help(b, name, label)
         if name == "Fabric":
             self.build_filter()
+            self.build_save_set()
         holder = ttk.Frame(self); holder.pack(fill="both", expand=True, padx=8, pady=8)
         self.tree = ttk.Treeview(holder, columns=FIELDS[name], show="headings", height=12, selectmode="extended")
         for c in FIELDS[name]:
@@ -148,6 +149,26 @@ class RecordForm(ttk.Frame):
             self.attach_help(b, self.name, label)
         self.shown = ttk.Label(btns, text="")
         self.shown.pack(side="left", padx=8)
+
+    def build_save_set(self):
+        box = ttk.LabelFrame(self, text="Save Selection")
+        box.pack(fill="x", padx=8, pady=4)
+        ttk.Label(box, text="TITLE").grid(row=0, column=0, padx=(6, 2), pady=4)
+        self.set_title = tk.StringVar()
+        entry = ttk.Entry(box, textvariable=self.set_title, width=40)
+        entry.grid(row=0, column=1, padx=2, sticky="w")
+        self.attach_help(entry, self.name, "Title")
+        b = ttk.Button(box, text="Save Selection", command=self.save_selection)
+        b.grid(row=0, column=2, padx=6)
+        self.attach_help(b, self.name, "Save Selection")
+
+    def save_selection(self):
+        try:
+            self.db.save_fabric_set(self.set_title.get(), self.sels)
+        except ValueError as e:
+            return messagebox.showerror("Save Selection", str(e))
+        self.set_title.set("")
+        messagebox.showinfo("Save Selection", f"Saved {len(self.sels)} fabric record(s).")
 
     def clear_filter(self):
         for k, v in self.fvars.items():

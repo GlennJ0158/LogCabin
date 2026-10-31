@@ -153,6 +153,31 @@ class GroupTests(BindingTests):
             self.app_mod.messagebox.askyesno = orig
         self.assertEqual([r["ID"] for r in self.form.db.list("FABRIC")], [2])
 
+    def test_save_selection_captures_selected_records(self):
+        self.form.tree.selection_set(("1", "3"))
+        self.form.select(None)
+        self.form.set_title.set("Summer")
+        self.form.save_selection()
+        self.assertEqual(self.errors, [])
+        sets = self.form.db.list("FABRICSET")
+        self.assertEqual(len(sets), 1)
+        self.assertEqual(sets[0]["TITLE"], "Summer")
+        self.assertEqual(sets[0]["FABRICIDS"], "[1, 3]")
+        self.assertEqual(self.form.set_title.get(), "")
+
+    def test_save_selection_requires_title_and_selection(self):
+        self.form.tree.selection_set(("1",))
+        self.form.select(None)
+        self.form.set_title.set("")
+        self.form.save_selection()
+        self.assertEqual(len(self.errors), 1)
+        self.form.set_title.set("X")
+        self.form.tree.selection_set(())
+        self.form.select(None)
+        self.form.save_selection()
+        self.assertEqual(len(self.errors), 2)
+        self.assertEqual(self.form.db.list("FABRICSET"), [])
+
 
 class FilterTests(unittest.TestCase):
     def test_filter_fabric(self):
@@ -309,6 +334,21 @@ class T(unittest.TestCase):
     def test_impossible(self):
         with self.assertRaises(ValueError):
             plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), [])
+
+    def test_save_selection_title_and_ids(self):
+        import json
+        from db import helptext_pairs
+        d = self.db
+        with self.assertRaises(ValueError):
+            d.save_fabric_set("  ", [1])
+        with self.assertRaises(ValueError):
+            d.save_fabric_set("Set", [])
+        sid = d.save_fabric_set(" Spring ", [3, 1])
+        row = [r for r in d.list("FABRICSET") if r["ID"] == sid][0]
+        self.assertEqual(row["TITLE"], "Spring")
+        self.assertEqual(json.loads(row["FABRICIDS"]), [3, 1])
+        self.assertIn(("Fabric", "Save Selection"), helptext_pairs())
+        self.assertIn(("Fabric", "Title"), helptext_pairs())
 
 if __name__ == "__main__":
     unittest.main()

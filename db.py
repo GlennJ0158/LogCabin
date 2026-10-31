@@ -16,7 +16,8 @@ FIELDS = {
 PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
-FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown"]
+FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Save Selection"]
+FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text in the UI)
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
 SEED_HOVER = "Seeding, No Help (Hover)"
@@ -32,6 +33,8 @@ CREATE TABLE IF NOT EXISTS HELPTEXT(ID INTEGER PRIMARY KEY AUTOINCREMENT, RECORD
   FIELDNAME TEXT NOT NULL, HOVERTEXT TEXT DEFAULT '', FULLHELP TEXT DEFAULT '', USE INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS PANEL(ID INTEGER PRIMARY KEY AUTOINCREMENT, PANELNAME TEXT NOT NULL,
   SEAMALLOWANCE REAL NOT NULL DEFAULT 0.25, LENGTH REAL NOT NULL, WIDTH REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS FABRICSET(ID INTEGER PRIMARY KEY AUTOINCREMENT, TITLE TEXT NOT NULL,
+  FABRICIDS TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS CUTPLAN(ID INTEGER PRIMARY KEY AUTOINCREMENT, PANELID INTEGER, PLAN TEXT NOT NULL,
   APPROVED INTEGER NOT NULL DEFAULT 0);
 """
@@ -48,6 +51,7 @@ def helptext_pairs():
         pairs += [(rec, b) for b in RECORD_BUTTONS]
     pairs += [("Panel", b) for b in PANEL_BUTTONS]  # PanelForm buttons
     pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
+    pairs += [("Fabric", f) for f in FABRIC_SET_FIELDS]  # FABRIC selection-save title
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
 
     seen, out = set(), []
@@ -203,6 +207,16 @@ class DB:
             "SELECT HOVERTEXT, FULLHELP FROM HELPTEXT WHERE UPPER(RECORDNAME)=UPPER(?) AND UPPER(FIELDNAME)=UPPER(?) "
             "AND USE=1 ORDER BY ID DESC", (record, field)).fetchone()
         return (r["HOVERTEXT"], r["FULLHELP"]) if r else ("", "")
+
+    # fabric selections
+    def save_fabric_set(self, title, fabric_ids):
+        """Store a titled snapshot of selected FABRIC IDs (saved as JSON, like CUTPLAN.PLAN)."""
+        if not str(title or "").strip():
+            raise ValueError("Title is required")
+        ids = [int(i) for i in fabric_ids]
+        if not ids:
+            raise ValueError("Select at least one fabric record")
+        return self.add("FABRICSET", TITLE=title.strip(), FABRICIDS=json.dumps(ids))
 
     # plans
     def save_plan(self, panel_id, plan):
