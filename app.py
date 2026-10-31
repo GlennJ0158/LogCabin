@@ -242,8 +242,6 @@ class RecordForm(ttk.Frame):
 
     def select_all(self):
         self.tree.selection_set(self.tree.get_children())
-        self.selected = {int(i) for i in self.tree.get_children()}
-        self.paint()
 
     def select_highlighted(self):
         if not self.sels:

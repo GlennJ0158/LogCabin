@@ -157,7 +157,7 @@ class GroupTests(BindingTests):
         self.assertEqual([r["ID"] for r in self.form.db.list("FABRIC")], [2])
 
     def test_save_selection_captures_selected_records(self):
-        self.form.select_all()
+        self.form.selected = {1, 2, 3}
         self.form.tree.selection_set(("1", "3"))
         self.form.select(None)
         self.form.select_highlighted()
@@ -171,7 +171,7 @@ class GroupTests(BindingTests):
         self.assertEqual(self.form.set_title.get(), "")
 
     def test_save_selection_requires_title_and_selection(self):
-        self.form.select_all()
+        self.form.selected = {1, 2, 3}
         self.form.tree.selection_set(("1",))
         self.form.select(None)
         self.form.select_highlighted()
@@ -188,20 +188,20 @@ class GroupTests(BindingTests):
         self.form.tree.selection_set(("1", "2"))
         self.form.select(None)
         self.assertEqual(self.form.selected, set())
+        self.form.selected = {1, 2}
         self.form.select_all()
-        self.form.tree.selection_set(("3",))
-        self.form.select(None)
-        self.assertEqual(self.form.selected, {1, 2, 3})
+        self.assertEqual(self.form.selected, {1, 2})
+        self.assertEqual({int(i) for i in self.form.tree.selection()}, {1, 2, 3})
 
     def test_select_highlighted_reduces_selection(self):
-        self.form.select_all()
+        self.form.selected = {1, 2, 3}
         self.form.tree.selection_set(("2",))
         self.form.select(None)
         self.form.select_highlighted()
         self.assertEqual(self.form.selected, {2})
 
     def test_select_highlighted_without_highlight_does_nothing(self):
-        self.form.select_all()
+        self.form.selected = {1, 2, 3}
         self.form.tree.selection_set(())
         self.form.select(None)
         self.form.select_highlighted()
@@ -239,7 +239,7 @@ class GroupTests(BindingTests):
         self.assertEqual(len(self.errors), 2)
 
     def test_deleted_records_leave_selection(self):
-        self.form.select_all()
+        self.form.selected = {1, 2, 3}
         self.form.db.delete("FABRIC", 2)
         self.form.refresh()
         self.assertEqual(self.form.selected, {1, 3})
