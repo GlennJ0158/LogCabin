@@ -73,7 +73,7 @@ class RecordForm(ttk.Frame):
     def __init__(self, app, name):
         super().__init__(app.body)
         ttk.Label(self, text=f"v{VERSION}  {name}", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
-
+        self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
