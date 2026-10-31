@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from db import DB, FIELDS, NAV_RECORD, filter_fabric, sort_rows
+from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
 from version import LABEL
@@ -140,6 +140,7 @@ class RecordForm(ttk.Frame):
                 w = ttk.Entry(box, textvariable=self.fvars[k], width=width)
             w.grid(row=0, column=2 * i + 1)
             w.bind("<Return>", lambda e: self.refresh())
+            self.attach_help(w, self.name, "Filter" + k)
         btns = ttk.Frame(box)
         btns.grid(row=1, column=0, columnspan=16, sticky="w", pady=4)
         for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
