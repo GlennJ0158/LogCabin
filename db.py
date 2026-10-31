@@ -1,5 +1,6 @@
 """SQLite data layer for QuiltBack: FABRIC, DROPDOWN, HELPTEXT, PANEL and cutting plans."""
 import csv
+import io
 import json
 import os
 import sqlite3
@@ -234,7 +235,7 @@ class DB:
         for t in CSV_TABLES:
             cols = [n for n, _, _ in self._columns(t)]
             path = os.path.join(folder, f"QuiltBack_{t}.csv")
-            with open(path, "w", newline="", encoding="utf-8") as fh:
+            with open(path, "w", newline="", encoding="utf-8-sig") as fh:
                 w = csv.writer(fh)
                 w.writerow(cols)
                 for r in self.c.execute(f"SELECT {','.join(cols)} FROM {t} ORDER BY ID"):
@@ -243,32 +244,53 @@ class DB:
         return written
 
     def import_csv(self, folder):
-        """Upsert every QuiltBack_<TABLE>.csv found in folder, matching rows by ID. All-or-nothing.
-        Returns {table: rows_imported}. Raises ValueError on bad columns or values."""
-        counts = {}
+        """Upsert every QuiltBack_<TABLE>.csv in folder, matching rows by ID. All-or-nothing.
+        Missing files are skipped. Returns {table: {"found", "input", "added", "modified"}}.
+        Raises ValueError (naming the file) on unreadable, bad-header or bad-value files."""
+        summary = {}
         try:
             for t in CSV_TABLES:
+                stats = {"found": False, "input": 0, "added": 0, "modified": 0}
+                summary[t] = stats
                 path = os.path.join(folder, f"QuiltBack_{t}.csv")
                 if not os.path.exists(path):
                     continue
+                stats["found"] = True
+                name = os.path.basename(path)
+                text = self._read_text(path)
                 types = {cname: (ctype, cnn) for cname, ctype, cnn in self._columns(t)}
-                with open(path, newline="", encoding="utf-8") as fh:
-                    reader = csv.DictReader(fh)
-                    unknown = [c for c in (reader.fieldnames or []) if c not in types]
-                    if unknown or "ID" not in (reader.fieldnames or []):
-                        raise ValueError(f"{os.path.basename(path)}: header must include ID and only known columns "
-                                         f"(bad: {', '.join(unknown) or 'ID missing'})")
-                    n = 0
+                reader = csv.DictReader(io.StringIO(text, newline=""))
+                unknown = [c for c in (reader.fieldnames or []) if c not in types]
+                if unknown or "ID" not in (reader.fieldnames or []):
+                    raise ValueError(f"{name}: header must include ID and only known columns "
+                                     f"(bad: {', '.join(unknown) or 'ID missing'})")
+                try:
                     for raw in reader:
                         row = {k: self._csv_value(v, *types[k]) for k, v in raw.items()}
-                        self._upsert(t, row)
-                        n += 1
-                counts[t] = n
+                        stats["input"] += 1
+                        stats[self._upsert(t, row)] += 1
+                except (ValueError, sqlite3.Error) as e:
+                    raise ValueError(f"{name}, record {stats['input'] + 1}: {e}") from e
             self.c.commit()
         except Exception:
             self.c.rollback()
             raise
-        return counts
+        return summary
+
+    @staticmethod
+    def _read_text(path):
+        """Read a CSV as UTF-8 (BOM allowed); fall back to Windows-1252, which Excel writes by default."""
+        with open(path, "rb") as fh:
+            data = fh.read()
+        try:
+            return data.decode("utf-8-sig")
+        except UnicodeDecodeError as e:
+            try:
+                return data.decode("cp1252")
+            except UnicodeDecodeError:
+                name = os.path.basename(path)
+                raise ValueError(f"{name}: not UTF-8 or Windows-1252 text; byte 0x{data[e.start]:02X} at "
+                                 f"offset {e.start} is invalid. Re-save the file as CSV UTF-8 and retry.") from e
 
     @staticmethod
     def _csv_value(text, decl_type, not_null):
@@ -278,11 +300,12 @@ class DB:
         return text
 
     def _upsert(self, table, row):
+        """Insert or overwrite one row. Returns 'added' or 'modified'."""
         if row.get("ID") in (None, ""):
             row = {k: v for k, v in row.items() if k != "ID"}
             self.c.execute(f"INSERT INTO {table}({','.join(row)}) VALUES({','.join('?' * len(row))})",
                            list(row.values()))
-            return
+            return "added"
         id_ = int(row["ID"])
         row["ID"] = id_
         exists = self.c.execute(f"SELECT 1 FROM {table} WHERE ID=?", (id_,)).fetchone()
@@ -290,9 +313,10 @@ class DB:
         if exists:
             sets = ",".join(f"{k}=?" for k in others)
             self.c.execute(f"UPDATE {table} SET {sets} WHERE ID=?", list(others.values()) + [id_])
-        else:
-            self.c.execute(f"INSERT INTO {table}({','.join(row)}) VALUES({','.join('?' * len(row))})",
-                           list(row.values()))
+            return "modified"
+        self.c.execute(f"INSERT INTO {table}({','.join(row)}) VALUES({','.join('?' * len(row))})",
+                       list(row.values()))
+        return "added"
 
     # plans
     def save_plan(self, panel_id, plan):

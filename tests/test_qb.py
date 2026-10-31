@@ -381,14 +381,40 @@ class T(unittest.TestCase):
             self.assertEqual(len(files), len(CSV_TABLES))
             fresh = DB(":memory:")
             counts = fresh.import_csv(d)
-            self.assertEqual(counts["FABRIC"], 2)
+            self.assertEqual(counts["FABRIC"]["input"], 2)
+            self.assertEqual(counts["FABRIC"]["added"], 2)
             for t in CSV_TABLES:
                 self.assertEqual(fresh.list(t), self.db.list(t), t)
             # re-import is an upsert by ID: no duplicate rows
             fresh.import_csv(d)
             self.assertEqual(len(fresh.list("FABRIC")), 2)
 
-    def test_csv_import_rejects_bad_header_without_changes(self):
+    def test_csv_import_summary_and_missing_files(self):
+        import os, tempfile
+        self.db.add("FABRIC", NAME="Old", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=5, WIDTH=5, USE=1)
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "QuiltBack_FABRIC.csv"), "w", encoding="utf-8") as fh:
+                fh.write("ID,NAME,TYPE,GRAIN,LENGTH,WIDTH,USE\n1,Changed,Cotton,Lengthwise,5,5,1\n,New,,,2,2,1\n")
+            s = self.db.import_csv(d)
+        self.assertEqual(s["FABRIC"], {"found": True, "input": 2, "added": 1, "modified": 1})
+        self.assertFalse(s["PANEL"]["found"])
+        self.assertEqual(s["PANEL"]["input"], 0)
+        self.assertEqual(self.db.list("FABRIC")[0]["NAME"], "Changed")
+
+    def test_csv_import_reads_windows_1252_and_names_bad_file(self):
+        import os, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "QuiltBack_FABRIC.csv")
+            with open(path, "wb") as fh:  # Excel-style cp1252: 0x85 is an ellipsis
+                fh.write("ID,NAME,TYPE,GRAIN,LENGTH,WIDTH,USE\n1,Wait\u2026,Cotton,,5,5,1\n".encode("cp1252"))
+            self.db.import_csv(d)
+            self.assertEqual(self.db.list("FABRIC")[0]["NAME"], "Wait\u2026")
+            with open(path, "wb") as fh:
+                fh.write(b"ID,NAME,TYPE,GRAIN,LENGTH,WIDTH,USE\n1,\x81\x8d\x8f\x90\x9d,,,5,5,1\n")
+            with self.assertRaises(ValueError) as cm:
+                self.db.import_csv(d)
+            self.assertIn("QuiltBack_FABRIC.csv", str(cm.exception))
+
         import os, tempfile
         self.db.add("FABRIC", NAME="Keep", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=5, WIDTH=5, USE=1)
         before = self.db.list("FABRIC")

@@ -450,13 +450,18 @@ class App(tk.Tk):
         if not messagebox.askyesno("Import CSV", "Rows whose ID already exists will be overwritten. Continue?"):
             return
         try:
-            counts = self.db.import_csv(folder)
+            summary = self.db.import_csv(folder)
         except (OSError, ValueError, sqlite3.Error) as e:
             return messagebox.showerror("Import CSV", str(e))
         for f in self.forms.values():
             f.refresh()
-        summary = ", ".join(f"{t} {n}" for t, n in counts.items()) or "no QuiltBack_*.csv files found"
-        messagebox.showinfo("Import CSV", f"Imported rows: {summary}")
+        lines = [f"{'Table':<10}{'Input':>8}{'Added':>8}{'Modified':>10}"]
+        for t, s in summary.items():
+            if s["found"]:
+                lines.append(f"{t:<10}{s['input']:>8}{s['added']:>8}{s['modified']:>10}")
+            else:
+                lines.append(f"{t:<10}  no file, skipped")
+        messagebox.showinfo("Import CSV", "\n".join(lines))
 
     def show(self, name):
         for f in self.forms.values():
