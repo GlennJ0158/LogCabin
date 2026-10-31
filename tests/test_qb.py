@@ -272,6 +272,14 @@ class T(unittest.TestCase):
         self.assertNotIn("Bias grain", out)
         self.assertLess(out.index("</svg>"), out.index("Legend"))
 
+    def test_render_manual_html(self):
+        from printing import render_manual_html
+        out = render_manual_html("<Heading>", "Line <one>\n\nLine two")
+        self.assertIn("&lt;Heading&gt;", out)
+        self.assertIn("<p>Line &lt;one&gt;</p>", out)
+        self.assertIn("<p>Line two</p>", out)
+        self.assertEqual(out.count("<p>"), 2)
+
     def test_all_buttons_have_helptext_and_dropdown_entries(self):
         want = [(r, f) for r, f in __import__("db").helptext_pairs()]
         for r, b in (("Navigation", "Fabric"), ("Navigation", "Panel"), ("Navigation", "Dropdown"),

@@ -2,16 +2,13 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
-import webbrowser
-from pathlib import Path
 
 from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
-from printing import print_plan
+from printing import print_plan, render_manual_html, open_for_print
 from version import LABEL, VERSION
 
 ALL_FABRICS = "All fabric records"
-MANUAL_FILE = "USER_MANUAL.md"
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
@@ -444,7 +441,7 @@ class App(tk.Tk):
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, n)[0])
             b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
-        file_cmds = {"Export CSV": self.export_csv, "Import CSV": self.import_csv, "User Manual": self.open_manual}
+        file_cmds = {"Export CSV": self.export_csv, "Import CSV": self.import_csv, "User Manual": self.show_manual}
         for label in FILE_BUTTONS:
             cmd = file_cmds[label]
             b = ttk.Button(nav, text=label, command=cmd); b.pack(side="right", padx=2, pady=2)
@@ -452,11 +449,28 @@ class App(tk.Tk):
             b.bind("<F1>", lambda e, n=label: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
 
-    def open_manual(self):
-        path = Path(__file__).resolve().parent / MANUAL_FILE
-        if not path.is_file():
-            return messagebox.showinfo("User Manual", f"Manual not found:\n{path}")
-        webbrowser.open(path.as_uri())
+    def show_manual(self):
+        hover, full = self.db.helptext(NAV_RECORD, "User Manual")
+        heading = hover or "User Manual"
+        win = tk.Toplevel(self)
+        win.title("User Manual")
+        win.geometry("720x600")
+        ttk.Label(win, text=heading, font=("TkDefaultFont", 14, "bold"), wraplength=680).pack(anchor="w", padx=12, pady=(12, 6))
+        holder = ttk.Frame(win); holder.pack(fill="both", expand=True, padx=12)
+        vsb = ttk.Scrollbar(holder, orient="vertical"); vsb.pack(side="right", fill="y")
+        text = tk.Text(holder, wrap="word", yscrollcommand=vsb.set)
+        text.insert("1.0", full or "No help.")
+        text.configure(state="disabled")
+        text.pack(side="left", fill="both", expand=True)
+        vsb.configure(command=text.yview)
+        bar = ttk.Frame(win); bar.pack(fill="x", padx=12, pady=8)
+        ttk.Button(bar, text="Print", command=lambda: self.print_manual(heading, full)).pack(side="right")
+
+    def print_manual(self, heading, body):
+        try:
+            open_for_print(render_manual_html(heading, body))
+        except Exception as e:
+            messagebox.showerror("Print", str(e))
 
     def export_csv(self):
         folder = filedialog.askdirectory(title="Export all records to folder")

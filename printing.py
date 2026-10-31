@@ -36,10 +36,24 @@ td,th{{border:1px solid #888;padding:3px 8px}}</style></head><body>
 <script>window.onload=function(){{window.print();}}</script></body></html>"""
 
 
-def print_plan(plan):
-    """Write the report to a temp file and open it (the page triggers the print dialog). Returns the path."""
-    fd, path = tempfile.mkstemp(suffix=".html", prefix="quilt_plan_")
+def render_manual_html(heading, body):
+    paragraphs = "".join(f"<p>{html.escape(line)}</p>" for line in str(body or "").splitlines() if line.strip())
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>{html.escape(str(heading))}</title>
+<style>body{{font-family:sans-serif;max-width:800px}}</style></head><body>
+<div style="font-size:small;color:#666">{LABEL}</div>
+<h1>{html.escape(str(heading))}</h1>{paragraphs}
+<script>window.onload=function(){{window.print();}}</script></body></html>"""
+
+
+def open_for_print(page):
+    """Write the HTML page to a temp file and open it (the page triggers the print dialog). Returns the path."""
+    fd, path = tempfile.mkstemp(suffix=".html", prefix="quilt_print_")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(render_plan_html(plan))
+        f.write(page)
     webbrowser.open("file://" + path.replace(os.sep, "/") if os.name != "nt" else path)
     return path
+
+
+def print_plan(plan):
+    return open_for_print(render_plan_html(plan))
