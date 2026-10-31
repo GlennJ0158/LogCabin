@@ -21,6 +21,7 @@ PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
 FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Save Selection"]
 FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text in the UI)
+PANEL_SELECTION_FIELD = "Selection"   # Panel page dropdown: saved selection used to build the plan
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
 FILE_BUTTONS = ["Export CSV", "Import CSV"]   # top-bar buttons for all-records CSV transfer
@@ -57,6 +58,7 @@ def helptext_pairs():
     pairs += [("Panel", b) for b in PANEL_BUTTONS]  # PanelForm buttons
     pairs += [("Fabric", b) for b in FABRIC_BUTTONS]  # FABRIC filter buttons
     pairs += [("Fabric", f) for f in FABRIC_SET_FIELDS]  # FABRIC selection-save title
+    pairs += [("Panel", PANEL_SELECTION_FIELD)]  # PANEL saved-selection dropdown
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS]  # navigation buttons
     pairs += [(NAV_RECORD, b) for b in FILE_BUTTONS]  # CSV export/import buttons
 
@@ -222,6 +224,14 @@ class DB:
         if not ids:
             raise ValueError("Select at least one fabric record")
         return self.add("FABRICSET", TITLE=title.strip(), FABRICIDS=json.dumps(ids))
+
+    def fabrics_in_set(self, set_id):
+        """FABRIC rows (ID order) whose IDs are stored in FABRICSET set_id. Deleted fabrics are ignored."""
+        row = self.c.execute("SELECT FABRICIDS FROM FABRICSET WHERE ID=?", (set_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"Saved selection {set_id} not found")
+        ids = set(json.loads(row["FABRICIDS"]))
+        return [f for f in self.list("FABRIC") if f["ID"] in ids]
 
     # CSV transfer: one file per table, named QuiltBack_<TABLE>.csv
     def _columns(self, table):

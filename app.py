@@ -3,11 +3,12 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
 
-from db import DB, FIELDS, NAV_RECORD, FILE_BUTTONS, filter_fabric, sort_rows
+from db import DB, FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
 from version import LABEL, VERSION
 
+ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
@@ -339,6 +340,13 @@ class PanelForm(ttk.Frame):
             self.entries[k] = e
             Tip(e, self.db.helptext("Panel", k)[0])
             e.bind("<F1>", lambda ev, k=k: messagebox.showinfo(k, self.db.helptext("Panel", k)[1] or "No help."))
+        ttk.Label(top, text=PANEL_SELECTION_FIELD).grid(row=1, column=0, pady=(6, 0))
+        self.set_ids = {}
+        self.sel_var = tk.StringVar(value=ALL_FABRICS)
+        self.sel_box = ttk.Combobox(top, textvariable=self.sel_var, state="readonly", width=40)
+        self.sel_box.grid(row=1, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
+        Tip(self.sel_box, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[0])
+        self.sel_box.bind("<F1>", lambda ev: messagebox.showinfo(PANEL_SELECTION_FIELD, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[1] or "No help."))
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
         for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve),
                            ("Print Plan", self.print)):
@@ -352,7 +360,10 @@ class PanelForm(ttk.Frame):
         self.canvas = tk.Canvas(self, width=500, height=400, bg="white"); self.canvas.pack(padx=8, pady=4)
 
     def refresh(self):
-        pass
+        self.set_ids = {f"{s['ID']} - {s['TITLE']}": s["ID"] for s in self.db.list("FABRICSET")}
+        self.sel_box["values"] = [ALL_FABRICS] + list(self.set_ids)
+        if self.sel_var.get() not in self.sel_box["values"]:
+            self.sel_var.set(ALL_FABRICS)
 
     def build(self):
         try:
@@ -371,7 +382,9 @@ class PanelForm(ttk.Frame):
             panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", **nums}
             if min(panel["LENGTH"], panel["WIDTH"]) <= 0 or panel["SEAMALLOWANCE"] < 0:
                 raise ValueError("Dimensions must be positive")
-            self.plan = plan_panel(panel, self.db.list("FABRIC")); self.plan_id = None
+            chosen = self.sel_var.get()
+            fabrics = self.db.fabrics_in_set(self.set_ids[chosen]) if chosen in self.set_ids else self.db.list("FABRIC")
+            self.plan = plan_panel(panel, fabrics); self.plan_id = None
         except ValueError as e:
             return messagebox.showerror("Plan", str(e))
         self.text.delete("1.0", "end")

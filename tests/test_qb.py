@@ -439,6 +439,16 @@ class T(unittest.TestCase):
         self.assertEqual(json.loads(row["FABRICIDS"]), [3, 1])
         self.assertIn(("Fabric", "Save Selection"), helptext_pairs())
         self.assertIn(("Fabric", "Title"), helptext_pairs())
+        self.assertIn(("Panel", "Selection"), helptext_pairs())
+
+    def test_fabrics_in_set_filters_inventory(self):
+        f1 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="A")
+        f2 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="B")
+        f3 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="C")
+        sid = self.db.save_fabric_set("Only AC", [f3, f1])
+        self.assertEqual([f["ID"] for f in self.db.fabrics_in_set(sid)], [f1, f3])
+        with self.assertRaises(ValueError):
+            self.db.fabrics_in_set(999)
 
 if __name__ == "__main__":
     unittest.main()
