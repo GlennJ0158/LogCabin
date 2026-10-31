@@ -10,6 +10,7 @@ from version import LABEL, VERSION
 
 ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def"}
+BOOL_DEFAULT = {"Use": True, "Def": False}   # new/cleared records: USE on, DEF off
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
           ("Dropdown", "RecordName"): ("Dropdown", "RecordName"),
@@ -308,7 +309,7 @@ class RecordForm(ttk.Frame):
         self.tree.selection_set(())
         for f in self.fields:
             if f in BOOL:
-                self.vars[f].set(True)
+                self.vars[f].set(BOOL_DEFAULT[f])
             elif (self.name, f) in STATIC:
                 self.apply_default(f)
             else:
@@ -355,7 +356,7 @@ class RecordForm(ttk.Frame):
         """Retain last-used values: dropdown-linked fields stay as entered; others reset."""
         for f in self.fields:
             if f in BOOL:
-                self.vars[f].set(True)
+                self.vars[f].set(BOOL_DEFAULT[f])
             elif (self.name, f) not in STATIC and (self.name, f) not in RETAIN and f != "Grain":
                 self.vars[f].set("")
         self.sel, self.sels = None, []

@@ -102,6 +102,16 @@ class BindingTests(unittest.TestCase):
 
 
 class VersionTests(BindingTests):
+    def test_dropdown_clear_sets_def_off_and_use_on(self):
+        form = self.make("Dropdown")
+        form.vars["Def"].set(True)
+        form.clear()
+        self.assertFalse(form.vars["Def"].get())
+        self.assertTrue(form.vars["Use"].get())
+        form.vars["Def"].set(True)
+        form.after_save()
+        self.assertFalse(form.vars["Def"].get())
+
     def test_version_label_first_on_every_form(self):
         from version import VERSION
         import app
