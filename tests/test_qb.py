@@ -295,6 +295,13 @@ class T(unittest.TestCase):
         self.assertEqual(vals[0], "Zed")
         self.assertEqual(vals[1:], sorted(vals[1:], key=str.lower))
 
+    def test_display_sorts_with_null_text(self):
+        from db import sort_rows
+        self.db.add("FABRIC", NAME="b", TYPE=None, LENGTH=5, WIDTH=5)
+        self.db.add("FABRIC", NAME="a", TYPE="Linen", LENGTH=5, WIDTH=5)
+        got = [(r["TYPE"], r["NAME"]) for r in sort_rows("Fabric", self.db.list("FABRIC"))]
+        self.assertEqual(got, [(None, "b"), ("Linen", "a")])
+
     def test_display_sorts(self):
         from db import sort_rows
         d = self.db

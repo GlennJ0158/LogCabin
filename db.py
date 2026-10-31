@@ -78,8 +78,7 @@ def sort_rows(name, rows):
     """Order rows for display per SORTS (stable multi-key sort, text case-insensitive)."""
     rows = list(rows)
     for fld, desc in reversed(SORTS.get(name, [])):
-        rows.sort(key=lambda r: (r[fld] or 0) if isinstance(r[fld], (int, float)) or r[fld] is None
-                  else _txt(r[fld]), reverse=desc)
+        rows.sort(key=lambda r: r[fld] if isinstance(r[fld], (int, float)) else _txt(r[fld]), reverse=desc)
     return rows
 
 
