@@ -2,6 +2,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
+import webbrowser
+from pathlib import Path
 
 from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
@@ -9,6 +11,7 @@ from printing import print_plan
 from version import LABEL, VERSION
 
 ALL_FABRICS = "All fabric records"
+MANUAL_FILE = "USER_MANUAL.md"
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
@@ -441,11 +444,19 @@ class App(tk.Tk):
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, n)[0])
             b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
-        for label, cmd in zip(FILE_BUTTONS, (self.export_csv, self.import_csv)):
+        file_cmds = {"Export CSV": self.export_csv, "Import CSV": self.import_csv, "User Manual": self.open_manual}
+        for label in FILE_BUTTONS:
+            cmd = file_cmds[label]
             b = ttk.Button(nav, text=label, command=cmd); b.pack(side="right", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, label)[0])
             b.bind("<F1>", lambda e, n=label: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
+
+    def open_manual(self):
+        path = Path(__file__).resolve().parent / MANUAL_FILE
+        if not path.is_file():
+            return messagebox.showinfo("User Manual", f"Manual not found:\n{path}")
+        webbrowser.open(path.as_uri())
 
     def export_csv(self):
         folder = filedialog.askdirectory(title="Export all records to folder")

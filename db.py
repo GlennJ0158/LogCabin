@@ -26,7 +26,7 @@ FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text i
 PANEL_SELECTION_FIELD = "Selection"   # Panel page dropdown: saved selection used to build the plan
 NAV_RECORD = "Navigation"   # RECORDNAME for the screen-switching buttons (label = screen name)
 NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
-FILE_BUTTONS = ["Export CSV", "Import CSV"]   # top-bar buttons for all-records CSV transfer
+FILE_BUTTONS = ["Export CSV", "Import CSV", "User Manual"]   # top-bar buttons: CSV transfer and manual
 CSV_TABLES = ["PANEL", "FABRIC", "DROPDOWN", "HELPTEXT", "FABRICSET", "CUTPLAN"]
 SEED_HOVER = "Seeding, No Help (Hover)"
 SEED_FULL = "(Fullhelp) Seeding None"
