@@ -1,6 +1,7 @@
 """Printable cutting-plan report: HTML (cut list + panel drawing) opened in the browser's print dialog."""
 import html
 import os
+import re
 import tempfile
 import webbrowser
 
@@ -36,13 +37,52 @@ td,th{{border:1px solid #888;padding:3px 8px}}</style></head><body>
 <script>window.onload=function(){{window.print();}}</script></body></html>"""
 
 
+MANUAL_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def manual_blocks(body):
+    """Split manual text into (kind, runs) blocks. kind: 'h' heading, 'li' bullet, 'p' paragraph.
+    Line markup: '## ' starts a heading, '- ' or '* ' a bullet, '**text**' is bold. Blank lines are skipped."""
+    blocks = []
+    for raw in str(body or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("## "):
+            kind, line = "h", line[3:].strip()
+        elif line[:2] in ("- ", "* "):
+            kind, line = "li", line[2:].strip()
+        else:
+            kind = "p"
+        runs, pos = [], 0
+        for m in MANUAL_BOLD.finditer(line):
+            if m.start() > pos:
+                runs.append((line[pos:m.start()], False))
+            runs.append((m.group(1), True))
+            pos = m.end()
+        if pos < len(line):
+            runs.append((line[pos:], False))
+        blocks.append((kind, runs or [("", False)]))
+    return blocks
+
+
 def render_manual_html(heading, body):
-    paragraphs = "".join(f"<p>{html.escape(line)}</p>" for line in str(body or "").splitlines() if line.strip())
+    parts = []
+    for kind, runs in manual_blocks(body):
+        inner = "".join(f"<b>{html.escape(t)}</b>" if b else html.escape(t) for t, b in runs)
+        if kind == "h":
+            parts.append(f"<h2>{inner}</h2>")
+        elif kind == "li":
+            parts.append(f"<li>{inner}</li>")
+        else:
+            parts.append(f"<p>{inner}</p>")
+    # wrap consecutive <li> items in one <ul>
+    body_html = re.sub(r"((?:<li>.*?</li>)+)", r"<ul>\1</ul>", "".join(parts))
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>{html.escape(str(heading))}</title>
 <style>body{{font-family:sans-serif;max-width:800px}}</style></head><body>
 <div style="font-size:small;color:#666">{LABEL}</div>
-<h1>{html.escape(str(heading))}</h1>{paragraphs}
+<h1>{html.escape(str(heading))}</h1>{body_html}
 <script>window.onload=function(){{window.print();}}</script></body></html>"""
 
 

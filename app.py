@@ -5,7 +5,7 @@ import sqlite3
 
 from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, PANEL_CASE_FIELD, PANEL_CASES, filter_fabric, sort_rows
 from planner import plan_cases, cut_list, part_label
-from printing import print_plan, render_manual_html, open_for_print
+from printing import print_plan, render_manual_html, open_for_print, manual_blocks
 from version import LABEL, VERSION
 
 ALL_FABRICS = "All fabric records"
@@ -557,8 +557,18 @@ class App(tk.Tk):
         ttk.Label(win, text=heading, font=("TkDefaultFont", 14, "bold"), wraplength=680).pack(anchor="w", padx=12, pady=(12, 6))
         holder = ttk.Frame(win); holder.pack(fill="both", expand=True, padx=12)
         vsb = ttk.Scrollbar(holder, orient="vertical"); vsb.pack(side="right", fill="y")
-        text = tk.Text(holder, wrap="word", yscrollcommand=vsb.set)
-        text.insert("1.0", full or "No help.")
+        text = tk.Text(holder, wrap="word", yscrollcommand=vsb.set, padx=8, pady=6)
+        text.tag_configure("h", font=("TkDefaultFont", 12, "bold"), spacing1=10, spacing3=4)
+        text.tag_configure("p", spacing3=6)
+        text.tag_configure("li", lmargin1=24, lmargin2=40, spacing3=3)
+        text.tag_configure("b", font=("TkDefaultFont", 10, "bold"))
+        for kind, runs in manual_blocks(full or "No help."):
+            if kind == "li":
+                text.insert("end", "\u2022  ", ("li",))
+            for t, bold in runs:
+                tags = (kind, "b") if bold else (kind,)
+                text.insert("end", t, tags)
+            text.insert("end", "\n", (kind,))
         text.configure(state="disabled")
         text.pack(side="left", fill="both", expand=True)
         vsb.configure(command=text.yview)

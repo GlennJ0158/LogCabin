@@ -356,6 +356,22 @@ class T(unittest.TestCase):
         self.assertIn("<p>Line two</p>", out)
         self.assertEqual(out.count("<p>"), 2)
 
+    def test_manual_blocks_and_formatting(self):
+        from printing import manual_blocks, render_manual_html
+        body = "## Setup\nUse **bold** words.\n- first <item>\n* second\n\nLast"
+        self.assertEqual(manual_blocks(body), [
+            ("h", [("Setup", False)]),
+            ("p", [("Use ", False), ("bold", True), (" words.", False)]),
+            ("li", [("first <item>", False)]),
+            ("li", [("second", False)]),
+            ("p", [("Last", False)]),
+        ])
+        out = render_manual_html("H", body)
+        self.assertIn("<h2>Setup</h2>", out)
+        self.assertIn("<b>bold</b>", out)
+        self.assertIn("<ul><li>first &lt;item&gt;</li><li>second</li></ul>", out)
+        self.assertEqual(manual_blocks(""), [])
+
     def test_all_buttons_have_helptext_and_dropdown_entries(self):
         want = [(r, f) for r, f in __import__("db").helptext_pairs()]
         for r, b in (("Navigation", "Fabric"), ("Navigation", "Panel"), ("Navigation", "Dropdown"),
