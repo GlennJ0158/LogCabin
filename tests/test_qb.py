@@ -37,10 +37,13 @@ class BindingTests(unittest.TestCase):
         import app
         self.app_mod = app
         self._orig = app.messagebox.showerror
+        self._orig_info = app.messagebox.showinfo
         app.messagebox.showerror = lambda t, m, **k: self.errors.append((t, m))
+        app.messagebox.showinfo = lambda t, m, **k: None
 
     def tearDown(self):
         self.app_mod.messagebox.showerror = self._orig
+        self.app_mod.messagebox.showinfo = self._orig_info
         self.root.destroy()
 
     def make(self, name):
@@ -154,8 +157,10 @@ class GroupTests(BindingTests):
         self.assertEqual([r["ID"] for r in self.form.db.list("FABRIC")], [2])
 
     def test_save_selection_captures_selected_records(self):
+        self.form.select_all()
         self.form.tree.selection_set(("1", "3"))
         self.form.select(None)
+        self.form.select_highlighted()
         self.form.set_title.set("Summer")
         self.form.save_selection()
         self.assertEqual(self.errors, [])
@@ -166,17 +171,78 @@ class GroupTests(BindingTests):
         self.assertEqual(self.form.set_title.get(), "")
 
     def test_save_selection_requires_title_and_selection(self):
+        self.form.select_all()
         self.form.tree.selection_set(("1",))
         self.form.select(None)
+        self.form.select_highlighted()
         self.form.set_title.set("")
         self.form.save_selection()
         self.assertEqual(len(self.errors), 1)
         self.form.set_title.set("X")
-        self.form.tree.selection_set(())
-        self.form.select(None)
+        self.form.selected = set()
         self.form.save_selection()
         self.assertEqual(len(self.errors), 2)
         self.assertEqual(self.form.db.list("FABRICSET"), [])
+
+    def test_highlight_does_not_change_selection(self):
+        self.form.tree.selection_set(("1", "2"))
+        self.form.select(None)
+        self.assertEqual(self.form.selected, set())
+        self.form.select_all()
+        self.form.tree.selection_set(("3",))
+        self.form.select(None)
+        self.assertEqual(self.form.selected, {1, 2, 3})
+
+    def test_select_highlighted_reduces_selection(self):
+        self.form.select_all()
+        self.form.tree.selection_set(("2",))
+        self.form.select(None)
+        self.form.select_highlighted()
+        self.assertEqual(self.form.selected, {2})
+
+    def test_select_highlighted_without_highlight_does_nothing(self):
+        self.form.select_all()
+        self.form.tree.selection_set(())
+        self.form.select(None)
+        self.form.select_highlighted()
+        self.assertEqual(self.form.selected, {1, 2, 3})
+
+    def test_invert_selection_uses_shown_rows(self):
+        self.form.selected = {1}
+        self.form.fvars["Name"].set("red")
+        self.form.refresh()
+        self.form.invert_selection()
+        self.assertEqual(self.form.selected, {3})
+
+    def test_add_and_remove_named_selection(self):
+        sid = self.form.db.save_fabric_set("Base", [2])
+        self.form.refresh_sets()
+        self.form.set_combo.set(f"{sid} - Base")
+        self.form.selected = {1, 3}
+        self.form.add_to_named()
+        self.assertEqual(self.form.db.fabric_set_ids(sid), {1, 2, 3})
+        self.form.selected = {2}
+        self.form.remove_from_named()
+        self.assertEqual(self.form.db.fabric_set_ids(sid), {1, 3})
+        self.assertEqual(self.errors, [])
+
+    def test_named_selection_requires_choice_and_selection(self):
+        self.form.selected = {1}
+        self.form.set_combo.set("")
+        self.form.add_to_named()
+        self.assertEqual(len(self.errors), 1)
+        sid = self.form.db.save_fabric_set("Base", [2])
+        self.form.refresh_sets()
+        self.form.set_combo.set(f"{sid} - Base")
+        self.form.selected = set()
+        self.form.remove_from_named()
+        self.assertEqual(len(self.errors), 2)
+
+    def test_deleted_records_leave_selection(self):
+        self.form.select_all()
+        self.form.db.delete("FABRIC", 2)
+        self.form.refresh()
+        self.assertEqual(self.form.selected, {1, 3})
 
 
 class FilterTests(unittest.TestCase):
@@ -471,6 +537,20 @@ class T(unittest.TestCase):
         self.assertEqual([f["ID"] for f in self.db.fabrics_in_set(sid)], [f1, f3])
         with self.assertRaises(ValueError):
             self.db.fabrics_in_set(999)
+
+    def test_change_fabric_set_adds_and_removes(self):
+        f1 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="A")
+        f2 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="B")
+        f3 = self.db.add("FABRIC", TYPE="Cotton", GRAIN="Lengthwise", LENGTH=10, WIDTH=10, USE=1, NAME="C")
+        sid = self.db.save_fabric_set("Mix", [f1])
+        self.db.change_fabric_set(sid, [f2, f3], add=True)
+        self.assertEqual(self.db.fabric_set_ids(sid), {f1, f2, f3})
+        self.db.change_fabric_set(sid, [f1, f3], add=False)
+        self.assertEqual(self.db.fabric_set_ids(sid), {f2})
+        with self.assertRaises(ValueError):
+            self.db.fabric_set_ids(999)
+        with self.assertRaises(ValueError):
+            self.db.change_fabric_set(999, [f1], add=True)
 
 if __name__ == "__main__":
     unittest.main()

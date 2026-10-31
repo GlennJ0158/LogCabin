@@ -19,10 +19,11 @@ FIELDS = {
 PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
-FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Save Selection"]
+FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Select Highlighted", "Invert Selection",
+                  "Save Selection", "Add to Selection", "Remove From Selection"]
 FILTER_FIELDS = ["FilterName", "FilterType", "FilterGrain", "FilterLengthMin", "FilterLengthMax",
                  "FilterWidthMin", "FilterWidthMax", "FilterUse"]  # FABRIC filter inputs (keys = app.py fvars)
-FABRIC_SET_FIELDS = ["Title"]   # Fabric page selection-save entry (label text in the UI)
+FABRIC_SET_FIELDS = ["Title", "NamedSelection"]   # Fabric page selection entries (keys = app.py widgets)
 PANEL_SELECTION_FIELD = "Selection"   # Panel page dropdown: saved selection used to build the plan
 PANEL_CASE_FIELD = "Case"   # Panel page layout choice: symmetric (equal cells) or variable (strips)
 PANEL_CASES = ["Symmetric", "Variable"]
@@ -238,6 +239,21 @@ class DB:
             raise ValueError(f"Saved selection {set_id} not found")
         ids = set(json.loads(row["FABRICIDS"]))
         return [f for f in self.list("FABRIC") if f["ID"] in ids]
+
+    def fabric_set_ids(self, set_id):
+        """Stored FABRIC IDs of FABRICSET set_id, as a set of ints."""
+        row = self.c.execute("SELECT FABRICIDS FROM FABRICSET WHERE ID=?", (set_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"Saved selection {set_id} not found")
+        return set(json.loads(row["FABRICIDS"]))
+
+    def change_fabric_set(self, set_id, fabric_ids, add):
+        """Add fabric_ids to (add=True) or remove them from (add=False) FABRICSET set_id."""
+        ids = self.fabric_set_ids(set_id)
+        changed = {int(i) for i in fabric_ids}
+        ids = ids | changed if add else ids - changed
+        self.c.execute("UPDATE FABRICSET SET FABRICIDS=? WHERE ID=?", (json.dumps(sorted(ids)), set_id))
+        self.c.commit()
 
     # CSV transfer: one file per table, named QuiltBack_<TABLE>.csv
     def _columns(self, table):

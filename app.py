@@ -77,6 +77,7 @@ class RecordForm(ttk.Frame):
         self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
+        self.selected = set()   # persistent selection (Fabric); grid highlight stays in self.sels
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
             ttk.Label(form, text=f.upper()).grid(row=i, column=0, sticky="e", padx=4, pady=2)
@@ -116,6 +117,7 @@ class RecordForm(ttk.Frame):
         hsb.grid(row=1, column=0, sticky="ew")
         holder.rowconfigure(0, weight=1); holder.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.select)
+        self.tree.tag_configure("chosen", background="#fff3b0")
         self.tree.bind("<Control-a>", lambda e: self.select_all() or "break")
         self.bind_errors = binding_errors(name, {f: (self.widgets.get(f), self.vars.get(f)) for f in self.fields})
         if self.bind_errors:
@@ -147,11 +149,13 @@ class RecordForm(ttk.Frame):
         btns = ttk.Frame(box)
         btns.grid(row=1, column=0, columnspan=16, sticky="w", pady=4)
         for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
-                           ("Select All Shown", self.select_all)):
+                           ("Select All Shown", self.select_all), ("Select Highlighted", self.select_highlighted),
+                           ("Invert Selection", self.invert_selection)):
             b = ttk.Button(btns, text=label, command=cmd); b.pack(side="left", padx=2)
             self.attach_help(b, self.name, label)
         self.shown = ttk.Label(btns, text="")
         self.shown.pack(side="left", padx=8)
+        self.shown_count = 0
 
     def build_save_set(self):
         box = ttk.LabelFrame(self, text="Save Selection")
@@ -164,14 +168,57 @@ class RecordForm(ttk.Frame):
         b = ttk.Button(box, text="Save Selection", command=self.save_selection)
         b.grid(row=0, column=2, padx=6)
         self.attach_help(b, self.name, "Save Selection")
+        named = ttk.LabelFrame(self, text="Named Selection")
+        named.pack(fill="x", padx=8, pady=4)
+        ttk.Label(named, text="Named selection").grid(row=0, column=0, padx=(6, 2), pady=4)
+        self.set_combo = ttk.Combobox(named, width=40, state="readonly")
+        self.set_combo.grid(row=0, column=1, padx=2, sticky="w")
+        self.attach_help(self.set_combo, self.name, "NamedSelection")
+        for col, (label, cmd) in enumerate((("Add to Selection", self.add_to_named),
+                                            ("Remove From Selection", self.remove_from_named)), start=2):
+            b = ttk.Button(named, text=label, command=cmd)
+            b.grid(row=0, column=col, padx=6)
+            self.attach_help(b, self.name, label)
+        self.refresh_sets()
+
+    def refresh_sets(self):
+        self.named_sets = {f"{s['ID']} - {s['TITLE']}": s["ID"] for s in self.db.list("FABRICSET")}
+        self.set_combo["values"] = list(self.named_sets)
+
+    def chosen_set_id(self):
+        set_id = self.named_sets.get(self.set_combo.get())
+        if set_id is None:
+            raise ValueError("Choose a named selection first")
+        return set_id
+
+    def add_to_named(self):
+        try:
+            set_id = self.chosen_set_id()
+            if not self.selected:
+                raise ValueError("Select at least one fabric record")
+            self.db.change_fabric_set(set_id, self.selected, add=True)
+        except ValueError as e:
+            return messagebox.showerror("Add to Selection", str(e))
+        messagebox.showinfo("Add to Selection", f"Added {len(self.selected)} fabric record(s).")
+
+    def remove_from_named(self):
+        try:
+            set_id = self.chosen_set_id()
+            if not self.selected:
+                raise ValueError("Select at least one fabric record")
+            self.db.change_fabric_set(set_id, self.selected, add=False)
+        except ValueError as e:
+            return messagebox.showerror("Remove From Selection", str(e))
+        messagebox.showinfo("Remove From Selection", f"Removed {len(self.selected)} fabric record(s).")
 
     def save_selection(self):
         try:
-            self.db.save_fabric_set(self.set_title.get(), self.sels)
+            self.db.save_fabric_set(self.set_title.get(), self.selected)
         except ValueError as e:
             return messagebox.showerror("Save Selection", str(e))
         self.set_title.set("")
-        messagebox.showinfo("Save Selection", f"Saved {len(self.sels)} fabric record(s).")
+        self.refresh_sets()
+        messagebox.showinfo("Save Selection", f"Saved {len(self.selected)} fabric record(s).")
 
     def clear_filter(self):
         for k, v in self.fvars.items():
@@ -195,6 +242,24 @@ class RecordForm(ttk.Frame):
 
     def select_all(self):
         self.tree.selection_set(self.tree.get_children())
+        self.selected = {int(i) for i in self.tree.get_children()}
+        self.paint()
+
+    def select_highlighted(self):
+        if not self.sels:
+            return
+        self.selected &= set(self.sels)
+        self.paint()
+
+    def invert_selection(self):
+        self.selected = {int(i) for i in self.tree.get_children()} - self.selected
+        self.paint()
+
+    def paint(self):
+        """Mark selected rows in the grid and show the selection count."""
+        for iid in self.tree.get_children():
+            self.tree.item(iid, tags=("chosen",) if int(iid) in self.selected else ())
+        self.shown.config(text=f"{self.shown_count} shown, {len(self.selected)} selected")
 
     def attach_help(self, w, screen, field):
         hover, full = self.db.helptext(screen, field)
@@ -215,15 +280,20 @@ class RecordForm(ttk.Frame):
         self.tree.delete(*self.tree.get_children())
         rows = self.db.list(self.name)
         if self.name == "Fabric":
+            self.selected &= {r["ID"] for r in rows}   # drop deleted records from the selection
+            self.refresh_sets()
             for k, w in self.fcombos.items():
                 w["values"] = [""] + self.db.dropdown("Fabric", k)[0]
             try:
                 rows = filter_fabric(rows, **self.filter_criteria())
             except ValueError as e:
                 messagebox.showerror("Filter", str(e))
-            self.shown.config(text=f"{len(rows)} shown")
+            self.shown_count = len(rows)
         for r in sort_rows(self.name, rows):
-            self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]])
+            self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]],
+                             tags=("chosen",) if r["ID"] in self.selected else ())
+        if self.name == "Fabric":
+            self.paint()
         self.sel, self.sels = None, []
         for f in self.fields:   # first-show defaults
             if not self.vars[f].get() and f not in BOOL and (self.name, f) in STATIC:
