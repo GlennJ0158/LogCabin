@@ -6,7 +6,7 @@ import sqlite3
 from db import DB, FIELDS, NAV_RECORD, FILE_BUTTONS, filter_fabric, sort_rows
 from planner import plan_panel, cut_list, part_label
 from printing import print_plan
-from version import LABEL
+from version import LABEL, VERSION
 
 BOOL = {"Use", "Def"}
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
@@ -72,8 +72,8 @@ class RecordForm(ttk.Frame):
     """Generic maintenance form for FABRIC, DROPDOWN or HELPTEXT."""
     def __init__(self, app, name):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
-        self.app, self.name, self.db = app, name, app.db
+        ttk.Label(self, text=f"v{VERSION}  {name}", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
@@ -327,7 +327,7 @@ class RecordForm(ttk.Frame):
 class PanelForm(ttk.Frame):
     def __init__(self, app):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+        ttk.Label(self, text=f"v{VERSION}  Panel", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}

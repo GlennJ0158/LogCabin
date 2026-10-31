@@ -100,13 +100,13 @@ class BindingTests(unittest.TestCase):
 
 class VersionTests(BindingTests):
     def test_version_label_first_on_every_form(self):
-        from version import LABEL
+        from version import VERSION
         import app
         class A: pass
         a = A(); a.db = DB(":memory:"); a.body = self.root
-        for form in (app.RecordForm(a, "Fabric"), app.RecordForm(a, "Dropdown"),
-                     app.RecordForm(a, "Helptext"), app.PanelForm(a)):
-            self.assertEqual(form.winfo_children()[0].cget("text"), LABEL)
+        for name, form in (("Fabric", app.RecordForm(a, "Fabric")), ("Dropdown", app.RecordForm(a, "Dropdown")),
+                           ("Helptext", app.RecordForm(a, "Helptext")), ("Panel", app.PanelForm(a))):
+            self.assertEqual(form.winfo_children()[0].cget("text"), f"v{VERSION}  {name}")
 
 
 class GroupTests(BindingTests):
