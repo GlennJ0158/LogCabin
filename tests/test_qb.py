@@ -487,6 +487,15 @@ class T(unittest.TestCase):
         plan = plan_panel(dict(PANELNAME="p", SEAMALLOWANCE=.25, LENGTH=10, WIDTH=10), self.db.list("FABRIC"))
         self.assertEqual(part_label(plan["parts"][0]), "^| Rose (#1)")
 
+    def test_equal_capacity_tie_revolves_crosswise_fabric_to_run_up_and_down(self):
+        from planner import _layout, grain_direction
+        for grain, rotated in (("Lengthwise", False), ("Crosswise", True)):
+            fabric = {"ID": 6, "NAME": "Scrap", "GRAIN": grain, "LENGTH": 62, "WIDTH": 93, "USE": 1}
+            rot, per_row, n_rows, _ = _layout(fabric, 31, 31)
+            self.assertEqual(per_row * n_rows, 6)
+            self.assertEqual(rot, rotated)
+            self.assertEqual(grain_direction(grain, rot), "v")
+
     def test_version_on_print_page(self):
         from printing import render_plan_html
         from version import LABEL

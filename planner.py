@@ -8,14 +8,14 @@ EPS = 1e-9
 def _layout(fab, cw, ch):
     """Best way to cut cells of ch x cw (cut size) from one fabric.
     Returns (rotated, per_row, cell_rows, strip) or None. A strip is cut across the full width of the fabric,
-    so consumed length = number of strip rows * strip length."""
+    so consumed length = number of strip rows * strip length. Ties on capacity prefer grain running up and down."""
     opts = []
     for rot, along, across in ((False, ch, cw), (True, cw, ch)):
         per_row = int((fab["WIDTH"] + EPS) // across)
         n_rows = int((fab["LENGTH"] + EPS) // along)
         if per_row and n_rows:
             opts.append((rot, per_row, n_rows, along))
-    return max(opts, key=lambda o: o[1] * o[2]) if opts else None
+    return max(opts, key=lambda o: (o[1] * o[2], grain_direction(fab["GRAIN"], o[0]) == "v")) if opts else None
 
 
 def _assign(avail, need_l, need_w, count):
@@ -132,7 +132,7 @@ def _plan_strips(panel, avail, max_parts):
                     pwc = min(span_x, left + 2 * sa)
                     if pwc - 2 * sa <= EPS:
                         continue
-                    key = (round(pwc, 6), -(A * B))
+                    key = (round(pwc, 6), -(A * B), grain_direction(fabrics[fid]["GRAIN"], rot) == "v")
                     if best is None or key > best[0]:
                         best = (key, idx, rot, pwc)
             if best is None:
