@@ -372,6 +372,23 @@ class T(unittest.TestCase):
         self.assertIn("<ul><li>first &lt;item&gt;</li><li>second</li></ul>", out)
         self.assertEqual(manual_blocks(""), [])
 
+    def test_rtf_manual_is_read_not_shown_raw(self):
+        from printing import manual_blocks, render_manual_html
+        rtf = (r"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}{\colortbl;\red0\green0\blue0;}"
+               r"{\*\generator Word;}\pard\plain\f0 {\b Import CSV}\par "
+               r"Use the caf\'e9 button \b bold\b0  text.\par "
+               r"\pard{\pntext\bullet}\tab\bullet Export \u8217?files\par\pard}")
+        self.assertEqual(manual_blocks(rtf), [
+            ("h", [("Import CSV", True)]),
+            ("p", [("Use the caf\u00e9 button ", False), ("bold", True), (" text.", False)]),
+            ("li", [("Export \u2019files", False)]),
+        ])
+        out = render_manual_html("Manual", rtf)
+        self.assertNotIn("rtf1", out)
+        self.assertNotIn("fonttbl", out)
+        self.assertIn("<h2><b>Import CSV</b></h2>", out)
+        self.assertIn("<li>Export \u2019files</li>", out)
+
     def test_all_buttons_have_helptext_and_dropdown_entries(self):
         want = [(r, f) for r, f in __import__("db").helptext_pairs()]
         for r, b in (("Navigation", "Fabric"), ("Navigation", "Panel"), ("Navigation", "Dropdown"),

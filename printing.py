@@ -38,11 +38,112 @@ td,th{{border:1px solid #888;padding:3px 8px}}</style></head><body>
 
 
 MANUAL_BOLD = re.compile(r"\*\*(.+?)\*\*")
+RTF_SKIP = {"fonttbl", "colortbl", "stylesheet", "info", "pict", "header", "footer", "headerl", "headerr",
+            "footerl", "footerr", "themedata", "colorschememapping", "latentstyles", "datastore", "generator",
+            "pntext", "listtext"}
+RTF_WORD = re.compile(r"([a-zA-Z]+)(-?\d+)? ?")
+RTF_GROUP_START = re.compile(r"\\(\*|([a-zA-Z]+))")
+
+
+def rtf_blocks(text):
+    """Read the common RTF codes (paragraphs, bold, tabs, bullets, unicode, hex) into manual blocks.
+    Italic and underline are not displayed. A paragraph whose text is all bold becomes a heading."""
+    blocks, cells, bold, skip, stack = [], [], False, False, []
+
+    def flush():
+        while cells and cells[0][0].isspace():
+            cells.pop(0)
+        while cells and cells[-1][0].isspace():
+            cells.pop()
+        if not cells:
+            return
+        kind = "p"
+        if cells[0][0] == "\u2022":
+            kind = "li"
+            cells.pop(0)
+            while cells and cells[0][0].isspace():
+                cells.pop(0)
+        elif all(b for _, b in cells):
+            kind = "h"
+        runs = []
+        for ch, b in cells:
+            if runs and runs[-1][1] == b:
+                runs[-1] = (runs[-1][0] + ch, b)
+            else:
+                runs.append((ch, b))
+        blocks.append((kind, runs))
+        cells.clear()
+
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        if c == "{":
+            stack.append((bold, skip))
+            m = RTF_GROUP_START.match(text, i + 1)
+            if m and (m.group(1) == "*" or m.group(2) in RTF_SKIP):
+                skip = True
+            i += 1
+        elif c == "}":
+            if stack:
+                bold, skip = stack.pop()
+            i += 1
+        elif c == "\\":
+            d = text[i + 1] if i + 1 < n else ""
+            if d in ("\\", "{", "}"):
+                if not skip:
+                    cells.append((d, bold))
+                i += 2
+            elif d == "'":
+                if not skip:
+                    cells.append((bytes([int(text[i + 2:i + 4], 16)]).decode("cp1252", errors="replace"), bold))
+                i += 4
+            elif d == "~":
+                if not skip:
+                    cells.append((" ", bold))
+                i += 2
+            elif d.isalpha():
+                m = RTF_WORD.match(text, i + 1)
+                word, param = m.group(1), m.group(2)
+                i = m.end()
+                p = int(param) if param is not None else None
+                if word in RTF_SKIP:
+                    skip = True
+                elif skip:
+                    continue
+                elif word == "par":
+                    flush()
+                elif word == "line":
+                    cells.append((" ", bold))
+                elif word == "tab":
+                    cells.append(("\t", bold))
+                elif word == "bullet":
+                    cells.append(("\u2022", bold))
+                elif word == "b":
+                    bold = p != 0
+                elif word == "plain":
+                    bold = False
+                elif word == "u" and p is not None:
+                    cells.append((chr(p % 65536), bold))
+                    if i < n and text[i] not in "\\{}":
+                        i += 1   # skip the ASCII fallback character after \uN
+            else:
+                i += 2
+        elif c in "\r\n":
+            i += 1
+        else:
+            if not skip:
+                cells.append((c, bold))
+            i += 1
+    flush()
+    return blocks
 
 
 def manual_blocks(body):
     """Split manual text into (kind, runs) blocks. kind: 'h' heading, 'li' bullet, 'p' paragraph.
-    Line markup: '## ' starts a heading, '- ' or '* ' a bullet, '**text**' is bold. Blank lines are skipped."""
+    RTF text (starts with {\\rtf) is read with rtf_blocks(). Otherwise line markup:
+    '## ' starts a heading, '- ' or '* ' a bullet, '**text**' is bold. Blank lines are skipped."""
+    if str(body or "").lstrip().startswith("{\\rtf"):
+        return rtf_blocks(str(body))
     blocks = []
     for raw in str(body or "").splitlines():
         line = raw.strip()
