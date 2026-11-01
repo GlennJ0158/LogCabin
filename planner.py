@@ -236,5 +236,5 @@ def cut_list(plan):
     lines = []
     for n, c in enumerate(plan["cuts"], 1):
         lines.append(f"{n}. Fabric #{c['fabric_id']} ({c['name']}): cut {c['cut_length']:g} x {c['cut_width']:g}"
-                     f" (finished {plan['length'] / plan['rows']:g} x {plan['width'] / plan['cols']:g})")
+                     f" (finished {c['finished_length']:g} x {c['finished_width']:g})")
     return "\n".join(lines)
