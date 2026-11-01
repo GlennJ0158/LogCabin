@@ -203,12 +203,30 @@ class GroupTests(BindingTests):
         self.assertEqual(self.form.selected, {1, 2})
         self.assertEqual({int(i) for i in self.form.tree.selection()}, {1, 2, 3})
 
-    def test_select_highlighted_reduces_selection(self):
-        self.form.selected = {1, 2, 3}
+    def test_select_highlighted_replaces_selection_with_highlight(self):
+        self.form.selected = {1}
         self.form.tree.selection_set(("2",))
         self.form.select(None)
         self.form.select_highlighted()
         self.assertEqual(self.form.selected, {2})
+        self.assertEqual(self.form.tree.selection(), ())
+        self.assertEqual(self.form.shown.cget("text"), "3 shown, 1 selected")
+
+    def test_click_select_highlighted_then_invert_shows_two(self):
+        self.form.tree.selection_set(("1",))
+        self.form.select(None)
+        self.form.select_highlighted()
+        self.assertEqual(self.form.selected, {1})
+        self.form.invert_selection()
+        self.assertEqual(self.form.selected, {2, 3})
+        self.assertEqual(self.form.tree.selection(), ())
+        tagged = {i for i in self.form.tree.get_children() if "chosen" in self.form.tree.item(i, "tags")}
+        self.assertEqual(tagged, {"2", "3"})
+        self.form.tree.selection_set(("2", "3"))
+        self.form.select(None)
+        self.form.select_highlighted()
+        self.assertEqual(self.form.selected, {2, 3})
+        self.assertEqual(self.form.shown.cget("text"), "3 shown, 2 selected")
 
     def test_select_highlighted_without_highlight_does_nothing(self):
         self.form.selected = {1, 2, 3}

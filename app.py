@@ -247,7 +247,7 @@ class RecordForm(ttk.Frame):
     def select_highlighted(self):
         if not self.sels:
             return
-        self.selected &= set(self.sels)
+        self.selected = set(self.sels)
         self.paint()
 
     def invert_selection(self):
@@ -256,6 +256,7 @@ class RecordForm(ttk.Frame):
 
     def paint(self):
         """Mark selected rows in the grid and show the selection count."""
+        self.tree.selection_set(())   # clear the blue highlight; chosen rows show yellow
         for iid in self.tree.get_children():
             self.tree.item(iid, tags=("chosen",) if int(iid) in self.selected else ())
         self.shown.config(text=f"{self.shown_count} shown, {len(self.selected)} selected")
