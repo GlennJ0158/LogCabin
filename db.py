@@ -20,7 +20,7 @@ PANEL_FIELDS = ["PanelName", "SeamAllowance", "Length", "Width", "MaxParts"]
 PANEL_BUTTONS = ["Build Plan", "Save Plan", "Approve Plan", "Print Plan"]
 RECORD_BUTTONS = ["Add", "Update", "Delete", "Clear"]
 FABRIC_BUTTONS = ["Apply Filter", "Clear Filter", "Select All Shown", "Select Highlighted", "Invert Selection",
-                  "Save Selection", "Add to Selection", "Remove From Selection"]
+                  "Save Selection", "Add to Selection", "Remove From Selection", "Activate Selection"]
 FILTER_FIELDS = ["FilterName", "FilterType", "FilterGrain", "FilterLengthMin", "FilterLengthMax",
                  "FilterWidthMin", "FilterWidthMax", "FilterUse"]  # FABRIC filter inputs (keys = app.py fvars)
 FABRIC_SET_FIELDS = ["Title", "NamedSelection"]   # Fabric page selection entries (keys = app.py widgets)

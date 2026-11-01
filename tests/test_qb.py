@@ -235,6 +235,27 @@ class GroupTests(BindingTests):
         self.form.select_highlighted()
         self.assertEqual(self.form.selected, {1, 2, 3})
 
+    def test_activate_selection_displays_only_set_records(self):
+        sid = self.form.db.save_fabric_set("Reds", [1, 3])
+        self.form.refresh()
+        self.assertEqual(len(self.form.tree.get_children()), 3)
+        self.form.set_combo.set(f"{sid} - Reds")
+        self.form.activate_selection()
+        self.assertEqual(self.form.tree.get_children(), ("1", "3"))
+        self.assertEqual(self.form.shown.cget("text"), "2 shown, 0 selected")
+        self.form.fvars["Name"].set("red")
+        self.form.refresh()
+        self.assertEqual(self.form.tree.get_children(), ("1", "3"))
+        self.form.clear_filter()
+        self.assertEqual(len(self.form.tree.get_children()), 3)
+        self.assertIsNone(self.form.active_set)
+
+    def test_activate_selection_requires_choice(self):
+        self.form.set_combo.set("")
+        self.form.activate_selection()
+        self.assertEqual(len(self.errors), 1)
+        self.assertEqual(len(self.form.tree.get_children()), 3)
+
     def test_invert_selection_uses_shown_rows(self):
         self.form.selected = {1}
         self.form.fvars["Name"].set("red")

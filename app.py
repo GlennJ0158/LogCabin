@@ -79,6 +79,7 @@ class RecordForm(ttk.Frame):
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
         self.selected = set()   # persistent selection (Fabric); grid highlight stays in self.sels
+        self.active_set = None  # FABRICSET id whose records the Fabric grid shows (None = all)
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
             ttk.Label(form, text=f.upper()).grid(row=i, column=0, sticky="e", padx=4, pady=2)
@@ -176,7 +177,8 @@ class RecordForm(ttk.Frame):
         self.set_combo.grid(row=0, column=1, padx=2, sticky="w")
         self.attach_help(self.set_combo, self.name, "NamedSelection")
         for col, (label, cmd) in enumerate((("Add to Selection", self.add_to_named),
-                                            ("Remove From Selection", self.remove_from_named)), start=2):
+                                            ("Remove From Selection", self.remove_from_named),
+                                            ("Activate Selection", self.activate_selection)), start=2):
             b = ttk.Button(named, text=label, command=cmd)
             b.grid(row=0, column=col, padx=6)
             self.attach_help(b, self.name, label)
@@ -221,9 +223,19 @@ class RecordForm(ttk.Frame):
         self.refresh_sets()
         messagebox.showinfo("Save Selection", f"Saved {len(self.selected)} fabric record(s).")
 
+    def activate_selection(self):
+        try:
+            set_id = self.chosen_set_id()
+            self.db.fabric_set_ids(set_id)
+        except ValueError as e:
+            return messagebox.showerror("Activate Selection", str(e))
+        self.active_set = set_id
+        self.refresh()
+
     def clear_filter(self):
         for k, v in self.fvars.items():
             v.set("Any" if k == "Use" else "")
+        self.active_set = None
         self.refresh()
 
     def filter_criteria(self):
@@ -288,6 +300,13 @@ class RecordForm(ttk.Frame):
                 rows = filter_fabric(rows, **self.filter_criteria())
             except ValueError as e:
                 messagebox.showerror("Filter", str(e))
+            if self.active_set is not None:
+                try:
+                    keep = self.db.fabric_set_ids(self.active_set)
+                    rows = [r for r in rows if r["ID"] in keep]
+                except ValueError as e:
+                    self.active_set = None
+                    messagebox.showerror("Activate Selection", str(e))
             self.shown_count = len(rows)
         for r in sort_rows(self.name, rows):
             self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]],
