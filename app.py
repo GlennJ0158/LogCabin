@@ -1,13 +1,16 @@
 """QuiltBack: fabric inventory and panel builder (Tkinter + SQLite). Run: python app.py"""
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
+import sqlite3
 
-from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, filter_fabric, sort_rows
-from planner import plan_panel, cut_list, part_label
-from printing import print_plan
-from version import LABEL
+from db import DB, FIELDS, FILTER_FIELDS, NAV_RECORD, FILE_BUTTONS, PANEL_SELECTION_FIELD, PANEL_CASE_FIELD, PANEL_CASES, filter_fabric, sort_rows
+from planner import plan_cases, cut_list, part_label
+from printing import print_plan, render_manual_html, open_for_print, manual_blocks
+from version import LABEL, VERSION
 
+ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def"}
+BOOL_DEFAULT = {"Use": True, "Def": False}   # new/cleared records: USE on, DEF off
 # dropdown sources: (screen, field) -> (record, field) in DROPDOWN, or fixed callable
 STATIC = {("Fabric", "Type"): ("Fabric", "Type"), ("Fabric", "Grain"): ("Fabric", "Grain"),
           ("Dropdown", "RecordName"): ("Dropdown", "RecordName"),
@@ -71,10 +74,11 @@ class RecordForm(ttk.Frame):
     """Generic maintenance form for FABRIC, DROPDOWN or HELPTEXT."""
     def __init__(self, app, name):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+        ttk.Label(self, text=f"v{VERSION}  {name}", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.name, self.db = app, name, app.db
         self.fields = FIELDS[name][1:]
         self.vars, self.widgets, self.sel, self.sels, self.initial = {}, {}, None, [], {}
+        self.selected = set()   # persistent selection (Fabric); grid highlight stays in self.sels
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
             ttk.Label(form, text=f.upper()).grid(row=i, column=0, sticky="e", padx=4, pady=2)
@@ -101,6 +105,7 @@ class RecordForm(ttk.Frame):
             self.attach_help(b, name, label)
         if name == "Fabric":
             self.build_filter()
+            self.build_save_set()
         holder = ttk.Frame(self); holder.pack(fill="both", expand=True, padx=8, pady=8)
         self.tree = ttk.Treeview(holder, columns=FIELDS[name], show="headings", height=12, selectmode="extended")
         for c in FIELDS[name]:
@@ -113,6 +118,7 @@ class RecordForm(ttk.Frame):
         hsb.grid(row=1, column=0, sticky="ew")
         holder.rowconfigure(0, weight=1); holder.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self.select)
+        self.tree.tag_configure("chosen", background="#fff3b0")
         self.tree.bind("<Control-a>", lambda e: self.select_all() or "break")
         self.bind_errors = binding_errors(name, {f: (self.widgets.get(f), self.vars.get(f)) for f in self.fields})
         if self.bind_errors:
@@ -144,11 +150,76 @@ class RecordForm(ttk.Frame):
         btns = ttk.Frame(box)
         btns.grid(row=1, column=0, columnspan=16, sticky="w", pady=4)
         for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
-                           ("Select All Shown", self.select_all)):
+                           ("Select All Shown", self.select_all), ("Select Highlighted", self.select_highlighted),
+                           ("Invert Selection", self.invert_selection)):
             b = ttk.Button(btns, text=label, command=cmd); b.pack(side="left", padx=2)
             self.attach_help(b, self.name, label)
         self.shown = ttk.Label(btns, text="")
         self.shown.pack(side="left", padx=8)
+        self.shown_count = 0
+
+    def build_save_set(self):
+        box = ttk.LabelFrame(self, text="Save Selection")
+        box.pack(fill="x", padx=8, pady=4)
+        ttk.Label(box, text="TITLE").grid(row=0, column=0, padx=(6, 2), pady=4)
+        self.set_title = tk.StringVar()
+        entry = ttk.Entry(box, textvariable=self.set_title, width=40)
+        entry.grid(row=0, column=1, padx=2, sticky="w")
+        self.attach_help(entry, self.name, "Title")
+        b = ttk.Button(box, text="Save Selection", command=self.save_selection)
+        b.grid(row=0, column=2, padx=6)
+        self.attach_help(b, self.name, "Save Selection")
+        named = ttk.LabelFrame(self, text="Named Selection")
+        named.pack(fill="x", padx=8, pady=4)
+        ttk.Label(named, text="Named selection").grid(row=0, column=0, padx=(6, 2), pady=4)
+        self.set_combo = ttk.Combobox(named, width=40, state="readonly")
+        self.set_combo.grid(row=0, column=1, padx=2, sticky="w")
+        self.attach_help(self.set_combo, self.name, "NamedSelection")
+        for col, (label, cmd) in enumerate((("Add to Selection", self.add_to_named),
+                                            ("Remove From Selection", self.remove_from_named)), start=2):
+            b = ttk.Button(named, text=label, command=cmd)
+            b.grid(row=0, column=col, padx=6)
+            self.attach_help(b, self.name, label)
+        self.refresh_sets()
+
+    def refresh_sets(self):
+        self.named_sets = {f"{s['ID']} - {s['TITLE']}": s["ID"] for s in self.db.list("FABRICSET")}
+        self.set_combo["values"] = list(self.named_sets)
+
+    def chosen_set_id(self):
+        set_id = self.named_sets.get(self.set_combo.get())
+        if set_id is None:
+            raise ValueError("Choose a named selection first")
+        return set_id
+
+    def add_to_named(self):
+        try:
+            set_id = self.chosen_set_id()
+            if not self.selected:
+                raise ValueError("Select at least one fabric record")
+            self.db.change_fabric_set(set_id, self.selected, add=True)
+        except ValueError as e:
+            return messagebox.showerror("Add to Selection", str(e))
+        messagebox.showinfo("Add to Selection", f"Added {len(self.selected)} fabric record(s).")
+
+    def remove_from_named(self):
+        try:
+            set_id = self.chosen_set_id()
+            if not self.selected:
+                raise ValueError("Select at least one fabric record")
+            self.db.change_fabric_set(set_id, self.selected, add=False)
+        except ValueError as e:
+            return messagebox.showerror("Remove From Selection", str(e))
+        messagebox.showinfo("Remove From Selection", f"Removed {len(self.selected)} fabric record(s).")
+
+    def save_selection(self):
+        try:
+            self.db.save_fabric_set(self.set_title.get(), self.selected)
+        except ValueError as e:
+            return messagebox.showerror("Save Selection", str(e))
+        self.set_title.set("")
+        self.refresh_sets()
+        messagebox.showinfo("Save Selection", f"Saved {len(self.selected)} fabric record(s).")
 
     def clear_filter(self):
         for k, v in self.fvars.items():
@@ -173,6 +244,22 @@ class RecordForm(ttk.Frame):
     def select_all(self):
         self.tree.selection_set(self.tree.get_children())
 
+    def select_highlighted(self):
+        if not self.sels:
+            return
+        self.selected &= set(self.sels)
+        self.paint()
+
+    def invert_selection(self):
+        self.selected = {int(i) for i in self.tree.get_children()} - self.selected
+        self.paint()
+
+    def paint(self):
+        """Mark selected rows in the grid and show the selection count."""
+        for iid in self.tree.get_children():
+            self.tree.item(iid, tags=("chosen",) if int(iid) in self.selected else ())
+        self.shown.config(text=f"{self.shown_count} shown, {len(self.selected)} selected")
+
     def attach_help(self, w, screen, field):
         hover, full = self.db.helptext(screen, field)
         Tip(w, hover)
@@ -192,15 +279,20 @@ class RecordForm(ttk.Frame):
         self.tree.delete(*self.tree.get_children())
         rows = self.db.list(self.name)
         if self.name == "Fabric":
+            self.selected &= {r["ID"] for r in rows}   # drop deleted records from the selection
+            self.refresh_sets()
             for k, w in self.fcombos.items():
                 w["values"] = [""] + self.db.dropdown("Fabric", k)[0]
             try:
                 rows = filter_fabric(rows, **self.filter_criteria())
             except ValueError as e:
                 messagebox.showerror("Filter", str(e))
-            self.shown.config(text=f"{len(rows)} shown")
+            self.shown_count = len(rows)
         for r in sort_rows(self.name, rows):
-            self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]])
+            self.tree.insert("", "end", iid=str(r["ID"]), values=[r[c.upper()] for c in FIELDS[self.name]],
+                             tags=("chosen",) if r["ID"] in self.selected else ())
+        if self.name == "Fabric":
+            self.paint()
         self.sel, self.sels = None, []
         for f in self.fields:   # first-show defaults
             if not self.vars[f].get() and f not in BOOL and (self.name, f) in STATIC:
@@ -217,7 +309,7 @@ class RecordForm(ttk.Frame):
         self.tree.selection_set(())
         for f in self.fields:
             if f in BOOL:
-                self.vars[f].set(True)
+                self.vars[f].set(BOOL_DEFAULT[f])
             elif (self.name, f) in STATIC:
                 self.apply_default(f)
             else:
@@ -264,7 +356,7 @@ class RecordForm(ttk.Frame):
         """Retain last-used values: dropdown-linked fields stay as entered; others reset."""
         for f in self.fields:
             if f in BOOL:
-                self.vars[f].set(True)
+                self.vars[f].set(BOOL_DEFAULT[f])
             elif (self.name, f) not in STATIC and (self.name, f) not in RETAIN and f != "Grain":
                 self.vars[f].set("")
         self.sel, self.sels = None, []
@@ -306,8 +398,9 @@ class RecordForm(ttk.Frame):
 class PanelForm(ttk.Frame):
     def __init__(self, app):
         super().__init__(app.body)
-        ttk.Label(self, text=LABEL, foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
+        ttk.Label(self, text=f"v{VERSION}  Panel", foreground="gray").pack(anchor="nw", padx=8, pady=(4, 0))
         self.app, self.db, self.plan, self.plan_id = app, app.db, None, None
+        self.cases = {}
         top = ttk.Frame(self); top.pack(fill="x", padx=8, pady=8)
         self.entries = {}
         self.v = {k: tk.StringVar(value=d) for k, d in
@@ -318,6 +411,24 @@ class PanelForm(ttk.Frame):
             self.entries[k] = e
             Tip(e, self.db.helptext("Panel", k)[0])
             e.bind("<F1>", lambda ev, k=k: messagebox.showinfo(k, self.db.helptext("Panel", k)[1] or "No help."))
+        ttk.Label(top, text=PANEL_SELECTION_FIELD).grid(row=1, column=0, pady=(6, 0))
+        self.set_ids = {}
+        self.sel_var = tk.StringVar(value=ALL_FABRICS)
+        self.sel_box = ttk.Combobox(top, textvariable=self.sel_var, state="readonly", width=40)
+        self.sel_box.grid(row=1, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
+        Tip(self.sel_box, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[0])
+        self.sel_box.bind("<F1>", lambda ev: messagebox.showinfo(PANEL_SELECTION_FIELD, self.db.helptext("Panel", PANEL_SELECTION_FIELD)[1] or "No help."))
+        ttk.Label(top, text=PANEL_CASE_FIELD).grid(row=2, column=0, pady=(6, 0))
+        case_row = ttk.Frame(top); case_row.grid(row=2, column=1, columnspan=8, sticky="w", padx=4, pady=(6, 0))
+        self.case_var = tk.StringVar(value=PANEL_CASES[0])
+        self.case_btns = {}
+        for c in PANEL_CASES:
+            rb = ttk.Radiobutton(case_row, text=c, value=c, variable=self.case_var, command=self.switch_case)
+            rb.pack(side="left", padx=4)
+            rb.state(["disabled"])
+            Tip(rb, self.db.helptext("Panel", c)[0])
+            rb.bind("<F1>", lambda ev, c=c: messagebox.showinfo(c, self.db.helptext("Panel", c)[1] or "No help."))
+            self.case_btns[c] = rb
         bar = ttk.Frame(self); bar.pack(fill="x", padx=8)
         for label, cmd in (("Build Plan", self.build), ("Save Plan", self.save), ("Approve Plan", self.approve),
                            ("Print Plan", self.print)):
@@ -331,7 +442,10 @@ class PanelForm(ttk.Frame):
         self.canvas = tk.Canvas(self, width=500, height=400, bg="white"); self.canvas.pack(padx=8, pady=4)
 
     def refresh(self):
-        pass
+        self.set_ids = {f"{s['ID']} - {s['TITLE']}": s["ID"] for s in self.db.list("FABRICSET")}
+        self.sel_box["values"] = [ALL_FABRICS] + list(self.set_ids)
+        if self.sel_var.get() not in self.sel_box["values"]:
+            self.sel_var.set(ALL_FABRICS)
 
     def build(self):
         try:
@@ -350,11 +464,31 @@ class PanelForm(ttk.Frame):
             panel = {"PANELNAME": self.v["PANELNAME"].get() or "Panel", **nums}
             if min(panel["LENGTH"], panel["WIDTH"]) <= 0 or panel["SEAMALLOWANCE"] < 0:
                 raise ValueError("Dimensions must be positive")
-            self.plan = plan_panel(panel, self.db.list("FABRIC")); self.plan_id = None
+            chosen = self.sel_var.get()
+            fabrics = self.db.fabrics_in_set(self.set_ids[chosen]) if chosen in self.set_ids else self.db.list("FABRIC")
+            self.cases = plan_cases(panel, fabrics); self.plan_id = None
         except ValueError as e:
             return messagebox.showerror("Plan", str(e))
-        self.text.delete("1.0", "end")
-        self.text.insert("end", f"Seams: {self.plan['seams']}\n{cut_list(self.plan)}")
+        if not any(self.cases.values()):
+            return messagebox.showerror("Plan", f"Cannot build panel with {nums['MAXPARTS']} or fewer parts from available inventory")
+        self.case_var.set(PANEL_CASES[0] if self.cases["symmetric"] else PANEL_CASES[1])
+        for c in PANEL_CASES:
+            self.case_btns[c].state(["!disabled" if self.cases[c.lower()] else "disabled"])
+        self.show_case()
+
+    def switch_case(self):
+        self.plan_id = None
+        self.show_case()
+
+    def show_case(self):
+        """Display the plan for the selected case; a saved plan must be saved again after switching."""
+        label = self.case_var.get()
+        self.plan = self.cases.get(label.lower())
+        self.text.delete("1.0", "end"); self.canvas.delete("all")
+        if self.plan is None:
+            self.text.insert("end", f"{label} layout is not possible with the available inventory.")
+            return
+        self.text.insert("end", f"Case: {label}\nSeams: {self.plan['seams']}\n{cut_list(self.plan)}")
         self.draw()
 
     def draw(self):
@@ -368,11 +502,11 @@ class PanelForm(ttk.Frame):
 
     def save(self):
         if not self.plan:
-            return messagebox.showinfo("Save", "Build a plan first.")
+            return messagebox.showinfo("Save", "Build a plan first, or choose a case that is possible.")
         pid = self.db.add("PANEL", PANELNAME=self.plan["panel"], SEAMALLOWANCE=self.plan["seam_allowance"],
                           LENGTH=self.plan["length"], WIDTH=self.plan["width"])
         self.plan_id = self.db.save_plan(pid, self.plan)
-        messagebox.showinfo("Save", "Cutting plan saved.")
+        messagebox.showinfo("Save", f"{self.case_var.get()} cutting plan saved.")
 
     def print(self):
         if not self.plan:
@@ -406,7 +540,76 @@ class App(tk.Tk):
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             Tip(b, self.db.helptext(NAV_RECORD, n)[0])
             b.bind("<F1>", lambda e, n=n: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
+        file_cmds = {"Export CSV": self.export_csv, "Import CSV": self.import_csv, "User Manual": self.show_manual}
+        for label in FILE_BUTTONS:
+            cmd = file_cmds[label]
+            b = ttk.Button(nav, text=label, command=cmd); b.pack(side="right", padx=2, pady=2)
+            Tip(b, self.db.helptext(NAV_RECORD, label)[0])
+            b.bind("<F1>", lambda e, n=label: messagebox.showinfo(n, self.db.helptext(NAV_RECORD, n)[1] or "No help."))
         self.show("Fabric")
+
+    def show_manual(self):
+        hover, full = self.db.helptext(NAV_RECORD, "User Manual")
+        heading = hover or "User Manual"
+        win = tk.Toplevel(self)
+        win.title("User Manual")
+        win.geometry("720x600")
+        ttk.Label(win, text=heading, font=("TkDefaultFont", 14, "bold"), wraplength=680).pack(anchor="w", padx=12, pady=(12, 6))
+        holder = ttk.Frame(win); holder.pack(fill="both", expand=True, padx=12)
+        vsb = ttk.Scrollbar(holder, orient="vertical"); vsb.pack(side="right", fill="y")
+        text = tk.Text(holder, wrap="word", yscrollcommand=vsb.set, padx=8, pady=6)
+        text.tag_configure("h", font=("TkDefaultFont", 12, "bold"), spacing1=10, spacing3=4)
+        text.tag_configure("p", spacing3=6)
+        text.tag_configure("li", lmargin1=24, lmargin2=40, spacing3=3)
+        text.tag_configure("b", font=("TkDefaultFont", 10, "bold"))
+        for kind, runs in manual_blocks(full or "No help."):
+            if kind == "li":
+                text.insert("end", "\u2022  ", ("li",))
+            for t, bold in runs:
+                tags = (kind, "b") if bold else (kind,)
+                text.insert("end", t, tags)
+            text.insert("end", "\n", (kind,))
+        text.configure(state="disabled")
+        text.pack(side="left", fill="both", expand=True)
+        vsb.configure(command=text.yview)
+        bar = ttk.Frame(win); bar.pack(fill="x", padx=12, pady=8)
+        ttk.Button(bar, text="Print", command=lambda: self.print_manual(heading, full)).pack(side="right")
+
+    def print_manual(self, heading, body):
+        try:
+            open_for_print(render_manual_html(heading, body))
+        except Exception as e:
+            messagebox.showerror("Print", str(e))
+
+    def export_csv(self):
+        folder = filedialog.askdirectory(title="Export all records to folder")
+        if not folder:
+            return
+        try:
+            files = self.db.export_csv(folder)
+        except OSError as e:
+            return messagebox.showerror("Export CSV", str(e))
+        messagebox.showinfo("Export CSV", f"Exported {len(files)} tables to:\n{folder}")
+
+    def import_csv(self):
+        folder = filedialog.askdirectory(title="Import records from folder")
+        if not folder:
+            return
+        if not messagebox.askyesno("Import CSV", "Rows whose ID already exists will be overwritten. Continue?"):
+            return
+        try:
+            summary = self.db.import_csv(folder)
+        except (OSError, ValueError, sqlite3.Error) as e:
+            return messagebox.showerror("Import CSV", str(e))
+        for f in self.forms.values():
+            f.refresh()
+        lines = [f"{'Table':<10}{'Input':>8}{'Added':>8}{'Modified':>10}"]
+        for t, s in summary.items():
+            if s["found"]:
+                lines.append(f"{t:<10}{s['input']:>8}{s['added']:>8}{s['modified']:>10}")
+            else:
+                lines.append(f"{t:<10}  no file, skipped")
+        messagebox.showinfo("Import CSV", "\n".join(lines))
 
     def show(self, name):
         for f in self.forms.values():
