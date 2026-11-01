@@ -10,6 +10,9 @@ BASE_DROPDOWNS = [
     ("Fabric", "Grain", ["Lengthwise", "Crosswise", "Bias"]),
 ]
 RECORDS = ["Fabric", "Dropdown", "Helptext"]
+# (record, field) pairs that show a dropdown menu; the DROPDOWN FieldName list holds only these field names
+DROPDOWN_FIELDS = [("Fabric", "Type"), ("Fabric", "Grain"), ("Dropdown", "RecordName"), ("Dropdown", "FieldName"),
+                   ("Helptext", "RecordName"), ("Helptext", "FieldName")]
 FIELDS = {
     "Fabric": ["Id", "Name", "Type", "Grain", "Length", "Width", "Use"],
     "Dropdown": ["Id", "RecordName", "FieldName", "Def", "Value", "Use"],
@@ -49,6 +52,10 @@ CREATE TABLE IF NOT EXISTS FABRICSET(ID INTEGER PRIMARY KEY AUTOINCREMENT, TITLE
 CREATE TABLE IF NOT EXISTS CUTPLAN(ID INTEGER PRIMARY KEY AUTOINCREMENT, PANELID INTEGER, PLAN TEXT NOT NULL,
   APPROVED INTEGER NOT NULL DEFAULT 0);
 """
+
+
+def dropdown_field_names():
+    return list(dict.fromkeys(f for _, f in DROPDOWN_FIELDS))
 
 
 def helptext_pairs():
@@ -129,16 +136,25 @@ class DB:
         self.c.executescript(SCHEMA)
         if not self.c.execute("SELECT 1 FROM DROPDOWN").fetchone():
             self._seed()
+        self.prune_dropdown_fields()
         self.seed_helptext()
         self.seed_helptext_dropdowns()
 
     def _seed(self):
         rows = list(BASE_DROPDOWNS)
         rows.append(("Dropdown", "RecordName", RECORDS))
-        rows.append(("Dropdown", "FieldName", [f for r in RECORDS for f in FIELDS[r][1:]]))
+        rows.append(("Dropdown", "FieldName", dropdown_field_names()))
         for rec, fld, vals in rows:
             for v in vals:
                 self.c.execute("INSERT INTO DROPDOWN(RECORDNAME,FIELDNAME,VALUE) VALUES(?,?,?)", (rec, fld, v))
+        self.c.commit()
+
+    def prune_dropdown_fields(self):
+        """Keep Dropdown.FieldName values to dropdown-backed field names (older databases seeded every field)."""
+        keep = dropdown_field_names()
+        marks = ",".join("?" * len(keep))
+        self.c.execute(f"DELETE FROM DROPDOWN WHERE UPPER(RECORDNAME)='DROPDOWN' AND UPPER(FIELDNAME)='FIELDNAME' "
+                       f"AND VALUE NOT IN ({marks})", keep)
         self.c.commit()
 
     def seed_helptext_dropdowns(self):

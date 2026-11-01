@@ -87,6 +87,8 @@ class RecordForm(ttk.Frame):
                 v = tk.BooleanVar(value=True); w = ttk.Checkbutton(form, variable=v)
             elif (name, f) in STATIC:
                 v = tk.StringVar(); w = ttk.Combobox(form, textvariable=v, width=28)
+                if (name, f) == ("Dropdown", "RecordName"):
+                    v.trace_add("write", lambda *_: self.update_field_choices())
             elif (name, f) == ("Helptext", "FullHelp"):
                 box = ttk.Frame(form)
                 w = tk.Text(box, height=6, width=60, wrap="word"); v = TextVar(w)
@@ -282,13 +284,28 @@ class RecordForm(ttk.Frame):
         hover, full = self.db.helptext(screen, field)
         messagebox.showinfo(f"{screen}.{field}", full or hover or "No help available.")
 
+    def field_choices(self, f):
+        """Dropdown values for a STATIC field; Dropdown.FieldName is limited to the fields of the chosen RecordName."""
+        vals, _, err = self.db.dropdown(*STATIC[(self.name, f)])
+        if err:
+            messagebox.showerror("Dropdown default", err)
+        if (self.name, f) == ("Dropdown", "FieldName"):
+            allowed = set(FIELDS.get(self.vars["RecordName"].get(), [])[1:])
+            vals = [v for v in vals if v in allowed]
+        return vals
+
+    def update_field_choices(self):
+        if "FieldName" not in self.widgets:
+            return
+        vals = self.field_choices("FieldName")
+        self.widgets["FieldName"]["values"] = vals
+        if self.vars["FieldName"].get() not in vals:
+            self.vars["FieldName"].set("")
+
     def refresh(self):
         for f in self.fields:
             if (self.name, f) in STATIC:
-                vals, _, err = self.db.dropdown(*STATIC[(self.name, f)])
-                self.widgets[f]["values"] = vals
-                if err:
-                    messagebox.showerror("Dropdown default", err)
+                self.widgets[f]["values"] = self.field_choices(f)
         self.tree.delete(*self.tree.get_children())
         rows = self.db.list(self.name)
         if self.name == "Fabric":

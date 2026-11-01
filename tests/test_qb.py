@@ -112,6 +112,15 @@ class VersionTests(BindingTests):
         form.after_save()
         self.assertFalse(form.vars["Def"].get())
 
+    def test_dropdown_fieldname_follows_recordname(self):
+        form = self.make("Dropdown")
+        form.vars["RecordName"].set("Fabric")
+        self.assertEqual(sorted(form.widgets["FieldName"]["values"]), ["Grain", "Type"])
+        form.vars["FieldName"].set("Type")
+        form.vars["RecordName"].set("Dropdown")
+        self.assertEqual(sorted(form.widgets["FieldName"]["values"]), ["FieldName", "RecordName"])
+        self.assertEqual(form.vars["FieldName"].get(), "")
+
     def test_version_label_first_on_every_form(self):
         from version import VERSION
         import app
@@ -442,6 +451,18 @@ class T(unittest.TestCase):
         self.assertIn("Apply Filter", self.db.dropdown("Helptext", "FieldName")[0])
         self.db.seed_helptext_dropdowns()   # idempotent
         self.assertEqual(self.db.dropdown("Helptext", "RecordName")[0], recs)
+
+    def test_dropdown_fieldname_seed_limited_to_dropdown_fields(self):
+        from db import dropdown_field_names
+        vals = self.db.dropdown("Dropdown", "FieldName")[0]
+        self.assertEqual(sorted(vals), sorted(dropdown_field_names()))
+        self.assertNotIn("Name", vals)
+        self.assertNotIn("Length", vals)
+
+    def test_prune_removes_non_dropdown_fieldnames_from_old_db(self):
+        self.db.add("DROPDOWN", RECORDNAME="Dropdown", FIELDNAME="FieldName", VALUE="Name")
+        self.db.prune_dropdown_fields()
+        self.assertNotIn("Name", self.db.dropdown("Dropdown", "FieldName")[0])
 
     def test_dropdown_sorted_def_then_value_and_column_order(self):
         from db import FIELDS
