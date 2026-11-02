@@ -6,7 +6,7 @@ import logcabin
 from db import LOG_RECORD
 from tooltip import Tip
 
-HEADER_FIELDS = ["PatternName", "Variation", "CentreSize", "CentreColor", "SeamAllowance"]
+HEADER_FIELDS = ["PatternName", "Variation", "CentreSize", "CentreColor", "SeamAllowance", "BlockWidth", "BlockLength"]
 GEN_FIELDS = ["Rings", "StripWidth", "StripSide", "StripColor"]
 QUILT_FIELDS = ["BlocksAcross", "BlocksDown"]
 
@@ -62,6 +62,8 @@ class LogCabinWindow(tk.Toplevel):
         self._entry(frm, "CentreSize", 1, 0)
         self._entry(frm, "CentreColor", 1, 2)
         self._entry(frm, "SeamAllowance", 2, 0)
+        self._entry(frm, "BlockWidth", 2, 2)
+        self._entry(frm, "BlockLength", 3, 0)
         gen = ttk.LabelFrame(self, text="Generate rings (Classic, Reverse Classic, Courthouse Steps)")
         gen.pack(fill="x", padx=6, pady=4)
         self._entry(gen, "Rings", 0, 0)
@@ -187,18 +189,48 @@ class LogCabinWindow(tk.Toplevel):
         self._refresh_strips()
 
     # ----- saved patterns -----
+    def _confirm_non_square(self, width, length):
+        """Ask before saving a block that is not square. Returns (save, don't ask again)."""
+        top = tk.Toplevel(self)
+        top.title("Log Cabin")
+        top.transient(self)
+        ttk.Label(top, text=f"The block is {width} x {length} in, which is not square.\nSave it anyway?",
+                  justify="left").pack(padx=12, pady=10)
+        again = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, text="Don't ask me again", variable=again).pack(padx=12)
+        result = {"save": False, "again": False}
+
+        def answer(save):
+            result.update(save=save, again=again.get())
+            top.destroy()
+
+        buttons = ttk.Frame(top)
+        buttons.pack(pady=10)
+        ttk.Button(buttons, text="Save", command=lambda: answer(True)).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Cancel", command=lambda: answer(False)).pack(side="left", padx=4)
+        top.grab_set()
+        top.wait_window()
+        return result["save"], result["again"]
+
     def save(self):
         checked = self._checked()
         if checked is None:
             return
+        header, _ = checked
+        # Each save of a new or edited pattern asks about a non-square block; the choice is stored on that pattern.
+        non_square_ok = False
+        if header["BlockWidth"] != header["BlockLength"]:
+            save, non_square_ok = self._confirm_non_square(header["BlockWidth"], header["BlockLength"])
+            if not save:
+                return
         try:
-            self.pattern_id = self.db.save_log_pattern(self.pattern_id, *checked)
+            self.pattern_id = self.db.save_log_pattern(self.pattern_id, *checked, non_square_ok=non_square_ok)
         except ValueError as e:
             messagebox.showerror("Log Cabin", str(e), parent=self)
             return
         self.refresh_saved()
         self.saved_tree.selection_set(str(self.pattern_id))
-        messagebox.showinfo("Log Cabin", f"Saved '{checked[0]['PatternName']}'.", parent=self)
+        messagebox.showinfo("Log Cabin", f"Saved '{header['PatternName']}'.", parent=self)
 
     def new(self):
         self.pattern_id = None
@@ -206,6 +238,8 @@ class LogCabinWindow(tk.Toplevel):
         self.vars["PatternName"].set("")
         self.vars["CentreSize"].set("")
         self.vars["CentreColor"].set("")
+        self.vars["BlockWidth"].set("")
+        self.vars["BlockLength"].set("")
         self._refresh_strips()
         self.saved_tree.selection_remove(self.saved_tree.selection())
         self._write("")
@@ -243,7 +277,7 @@ class LogCabinWindow(tk.Toplevel):
             return
         header, strips = checked
         plan = logcabin.cut_list(header, strips)
-        lines = [f"Block finished size: {plan['block']} x {plan['block']} in",
+        lines = [f"Block finished size: {plan['block_width']} x {plan['block_length']} in",
                  f"Centre square: {header['CentreSize']} in finished, cut {plan['centre_cut']} in ({header['CentreColor'] or 'any colour'})",
                  "", "Strip  Side    Colour  Finished (W x L)   Cut (W x L)"]
         for p in plan["strips"]:

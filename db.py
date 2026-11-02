@@ -44,7 +44,7 @@ RETAIN = {   # fields kept after Add/Update (the rest reset to blank or default)
 }
 
 LOG_RECORD = "LogCabin"   # HelpText TableName for the Log Cabin window
-LOG_FIELDS = ["PatternName", "Variation", "CentreSize", "CentreColor", "SeamAllowance",
+LOG_FIELDS = ["PatternName", "Variation", "CentreSize", "CentreColor", "SeamAllowance", "BlockWidth", "BlockLength",
               "StripSide", "StripColor", "StripWidth", "Rings", "BlocksAcross", "BlocksDown"]
 LOG_BUTTONS = ["Save Pattern", "New Pattern", "Delete Pattern", "Load Pattern", "Fill Strips", "Add Strip",
                "Remove Strip", "Move Up", "Move Down", "Show Cut List", "Quilt Summary"]
@@ -58,7 +58,9 @@ LOCAL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS LogPattern(
   ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, PatternName TEXT NOT NULL UNIQUE,
   Variation TEXT NOT NULL DEFAULT 'Other', CentreSize REAL NOT NULL CHECK (CentreSize > 0),
-  CentreColor TEXT NOT NULL DEFAULT '', SeamAllowance REAL NOT NULL DEFAULT 0.25 CHECK (SeamAllowance >= 0));
+  CentreColor TEXT NOT NULL DEFAULT '', SeamAllowance REAL NOT NULL DEFAULT 0.25 CHECK (SeamAllowance >= 0),
+  BlockWidth REAL NOT NULL DEFAULT 0, BlockLength REAL NOT NULL DEFAULT 0,
+  NonSquareOK INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS LogStrip(
   ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
   PatternID INTEGER NOT NULL REFERENCES LogPattern(ID) ON DELETE CASCADE,
@@ -108,6 +110,7 @@ class DB:
     def __init__(self, path="quiltback.db"):
         self.c = connect(path)
         self.c.executescript(LOCAL_SCHEMA)
+        self._migrate_log_block()
         dropdown.seed(self.c)
         dropdown.seed(self.c, LOG_LISTS)
         helptext.seed(self.c, extra_items=helptext_pairs())
@@ -256,6 +259,24 @@ class DB:
         self.c.commit()
 
     # Log Cabin patterns: a LogPattern header and its LogStrip rows, in strip order
+    def _migrate_log_block(self):
+        """Bring databases made before the block size and non-square columns up to date.
+
+        Block size columns are filled from the strips. The LogSetting table from an earlier version is dropped.
+        """
+        cols = {r["name"] for r in self.c.execute("PRAGMA table_info(LogPattern)")}
+        for col in ("BlockWidth", "BlockLength"):
+            if col not in cols:
+                self.c.execute(f"ALTER TABLE LogPattern ADD COLUMN {col} REAL NOT NULL DEFAULT 0")
+        if "NonSquareOK" not in cols:
+            self.c.execute("ALTER TABLE LogPattern ADD COLUMN NonSquareOK INTEGER NOT NULL DEFAULT 0")
+        self.c.execute("DROP TABLE IF EXISTS LogSetting")
+        for row in self.c.execute("SELECT ID FROM LogPattern WHERE BlockWidth = 0 OR BlockLength = 0").fetchall():
+            header, strips = self.log_pattern(row["ID"])
+            _, bw, bh = logcabin.place(header["CentreSize"], strips)
+            self.c.execute("UPDATE LogPattern SET BlockWidth=?, BlockLength=? WHERE ID=?", (bw, bh, row["ID"]))
+        self.c.commit()
+
     def log_choices(self, table, field):
         return dropdown.get_list(self.c, table, field)
 
@@ -282,9 +303,13 @@ class DB:
             "SELECT Side, Color, Width FROM LogStrip WHERE PatternID=? ORDER BY StripNo", (pattern_id,))]
         return dict(head), strips
 
-    def save_log_pattern(self, pattern_id, header, strips):
-        """Insert (pattern_id None) or replace a pattern and all its strips in one transaction. Returns its ID."""
+    def save_log_pattern(self, pattern_id, header, strips, non_square_ok=False):
+        """Insert (pattern_id None) or replace a pattern and all its strips in one transaction. Returns its ID.
+
+        non_square_ok records that the user confirmed saving this pattern with a non-square block.
+        """
         header, strips = self.log_clean(header, strips)
+        header = {**header, "NonSquareOK": int(bool(non_square_ok))}
         clash = self.c.execute("SELECT ID FROM LogPattern WHERE PatternName=?",
                                (header["PatternName"],)).fetchone()
         if clash and clash["ID"] != pattern_id:
@@ -292,12 +317,14 @@ class DB:
         try:
             if pattern_id is None:
                 pattern_id = self.c.execute(
-                    "INSERT INTO LogPattern(PatternName,Variation,CentreSize,CentreColor,SeamAllowance) "
-                    "VALUES(:PatternName,:Variation,:CentreSize,:CentreColor,:SeamAllowance)", header).lastrowid
+                    "INSERT INTO LogPattern(PatternName,Variation,CentreSize,CentreColor,SeamAllowance,BlockWidth,"
+                    "BlockLength,NonSquareOK) VALUES(:PatternName,:Variation,:CentreSize,:CentreColor,:SeamAllowance,"
+                    ":BlockWidth,:BlockLength,:NonSquareOK)", header).lastrowid
             else:
                 cur = self.c.execute(
                     "UPDATE LogPattern SET PatternName=:PatternName,Variation=:Variation,CentreSize=:CentreSize,"
-                    "CentreColor=:CentreColor,SeamAllowance=:SeamAllowance WHERE ID=:ID", {**header, "ID": pattern_id})
+                    "CentreColor=:CentreColor,SeamAllowance=:SeamAllowance,BlockWidth=:BlockWidth,"
+                    "BlockLength=:BlockLength,NonSquareOK=:NonSquareOK WHERE ID=:ID", {**header, "ID": pattern_id})
                 if not cur.rowcount:
                     raise ValueError(f"ID: no LogPattern row with ID {pattern_id}")
                 self.c.execute("DELETE FROM LogStrip WHERE PatternID=?", (pattern_id,))
