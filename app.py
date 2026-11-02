@@ -21,14 +21,15 @@ CHOICE_FIELDS = {   # fields chosen from a list (Combobox)
 }
 FILTER_KEYS = ("Name", "Color", "Shade", "Pattern", "Type", "Grain", "LengthMin", "LengthMax",
                "WidthMin", "WidthMax", "Use")
-FILTER_LAYOUT = (   # Fabric filter widgets: (key, label, width) per row
-    (("Name", "Name contains", 20), ("Color", "Color", 9), ("Shade", "Shade", 9), ("Pattern", "Pattern", 9)),
-    (("Type", "Type", 9), ("Grain", "Grain", 9), ("Use", "Use", 5)),
-    (("LengthMin", "Length min", 7), ("LengthMax", "max", 7), ("WidthMin", "Width min", 7), ("WidthMax", "max", 7)),
+FILTER_LAYOUT = (   # Fabric filter widgets: (key, label, width) per row, mirroring the data entry form
+    (("Name", "Name contains", 16), ("Color", "Color", 9), ("Shade", "Shade", 9), ("Pattern", "Pattern", 9),
+     ("Type", "Type", 9), ("Grain", "Grain", 9)),
+    (("LengthMin", "Length min", 7), ("LengthMax", "max", 7), ("WidthMin", "Width min", 7), ("WidthMax", "max", 7),
+     ("Use", "Use", 5)),
 )
 WIDE = {("Helptext", "HoverText"), ("Helptext", "FullText")}
-FILTER_COLOR = "#fffde7"      # very light yellow
-SELECTION_COLOR = "#e8f4fd"   # very light blue
+FILTER_COLOR = "#fffcdb"      # very light yellow (50% stronger than #fffde7)
+SELECTION_COLOR = "#ddeffc"   # very light blue (50% stronger than #e8f4fd)
 FIELD_LABELS = {"Fabric": {"FabricName": "Fabric Name"}}   # display labels; field keys are unchanged
 
 
@@ -128,6 +129,7 @@ class RecordForm(ttk.Frame):
     # Fabric filter and saved selections
     def tint_section(self, style, color):
         s = ttk.Style(self)
+        s.map("TCombobox", fieldbackground=[("readonly", "white")])   # keep entry boxes white over tinted sections
         for suffix in (".TFrame", ".TLabel", ".TLabelframe", ".TLabelframe.Label"):
             s.configure(style + suffix, background=color)
 
