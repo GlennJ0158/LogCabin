@@ -1,8 +1,10 @@
 """Log Cabin patterns: strips are sewn around a centre square, each strip spanning the full current side.
 
-A pattern is a centre square plus an ordered list of strips (Side, Color, Width). Strip N is placed on
-the growing square after strips 1..N-1. The block is square when every strip is placed.
-All dimensions are in inches. Cut sizes add a seam allowance to every edge (finished + 2 x seam).
+A pattern is a centre square, a block size (width x length, entered by the user) and an ordered list of
+strips (Side, Color, Width). Strip N is placed on the growing square after strips 1..N-1. The strips must
+close exactly to the block size; the block may be non-square. Cut sizes add a seam allowance to every edge
+(finished + 2 x seam).
+All dimensions are in inches.
 """
 from utilfuncs.validation import ValidationError, validate_choice, validate_number, validate_text
 
@@ -84,7 +86,8 @@ def place(centre, strips):
 def validate(header, strips, variations=VARIATIONS, sides=SIDES, colors=COLORS):
     """Clean a pattern. Returns (header, strips); raises ValidationError naming the field at fault.
 
-    The strips must close a square block, so a pattern that does not is rejected.
+    The strips must close exactly to the entered block size. A block that is not square is allowed here;
+    the caller confirms it with the user.
     """
     h = {
         "PatternName": validate_text("PatternName", header.get("PatternName"), max_len=100),
@@ -93,14 +96,16 @@ def validate(header, strips, variations=VARIATIONS, sides=SIDES, colors=COLORS):
         "CentreColor": validate_text("CentreColor", header.get("CentreColor"), max_len=50, required=False),
         "SeamAllowance": validate_number("SeamAllowance", header.get("SeamAllowance"), minimum=0,
                                          maximum=1, decimals=4),
+        "BlockWidth": _positive("BlockWidth", header.get("BlockWidth")),
+        "BlockLength": _positive("BlockLength", header.get("BlockLength")),
     }
     if not strips:
         raise ValidationError("Strips", "a pattern needs at least one strip")
     clean = [clean_strip(s, sides, colors, label=f"Strip {n}") for n, s in enumerate(strips, start=1)]
     _, bw, bh = place(h["CentreSize"], clean)
-    if abs(bw - bh) > 1e-6:
-        raise ValidationError("Strips", f"the strips make a {bw} x {bh} in block, not a square; "
-                                        "change the strips so the block closes")
+    if abs(bw - h["BlockWidth"]) > 1e-6 or abs(bh - h["BlockLength"]) > 1e-6:
+        raise ValidationError("Strips", f"the strips make a {bw} x {bh} in block but the block size is "
+                                        f"{h['BlockWidth']} x {h['BlockLength']} in; change the strips or the size")
     return h, clean
 
 
@@ -109,7 +114,8 @@ def cut_list(header, strips):
     seam = header["SeamAllowance"]
     placed, bw, bh = place(header["CentreSize"], strips)
     return {
-        "block": bw,
+        "block_width": bw,
+        "block_length": bh,
         "centre_cut": round(header["CentreSize"] + 2 * seam, 4),
         "strips": [dict(p, CutWidth=round(p["Width"] + 2 * seam, 4), CutLength=round(p["Length"] + 2 * seam, 4))
                    for p in placed],
@@ -126,7 +132,7 @@ def quilt(plan, across, down):
         inches[s["Color"]] = round(inches.get(s["Color"], 0) + s["CutLength"] * blocks, 4)
     return {
         "across": across, "down": down, "blocks": blocks,
-        "width": round(plan["block"] * across, 4), "height": round(plan["block"] * down, 4),
+        "width": round(plan["block_width"] * across, 4), "height": round(plan["block_length"] * down, 4),
         "centre_squares": blocks, "centre_cut": plan["centre_cut"],
         "strip_inches": inches,
     }
