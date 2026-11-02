@@ -9,7 +9,7 @@ from patternwin import LogCabinWindow
 from planner import plan_cases, cut_list, part_label
 from tooltip import Tip
 from printing import print_plan, render_manual_html, open_for_print, manual_blocks
-from version import LABEL, VERSION
+from version import VERSION
 
 ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def", "RT"}
@@ -27,6 +27,7 @@ FILTER_LAYOUT = (   # Fabric filter widgets: (key, label, width) per row
     (("LengthMin", "Length min", 7), ("LengthMax", "max", 7), ("WidthMin", "Width min", 7), ("WidthMax", "max", 7)),
 )
 WIDE = {("Helptext", "HoverText"), ("Helptext", "FullText")}
+FIELD_LABELS = {"Fabric": {"FabricName": "Fabric Name"}}   # display labels; field keys are unchanged
 
 
 class TextVar:
@@ -74,7 +75,9 @@ class RecordForm(ttk.Frame):
         self.shown_count = 0
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
-            ttk.Label(form, text=f).grid(row=i, column=0, sticky="e", padx=4, pady=2)
+            row, pair = divmod(i, 3) if name == "Fabric" else (i, 0)   # Fabric: three label/field pairs per row
+            lcol = 2 * pair
+            ttk.Label(form, text=FIELD_LABELS.get(name, {}).get(f, f)).grid(row=row, column=lcol, sticky="e", padx=4, pady=2)
             if f in BOOL:
                 v = tk.BooleanVar(value=BOOL_DEFAULT.get(f, False)); w = ttk.Checkbutton(form, variable=v)
             elif f in CHOICE_FIELDS.get(name, ()):
@@ -85,11 +88,11 @@ class RecordForm(ttk.Frame):
                 sb = ttk.Scrollbar(box, orient="vertical", command=w.yview)
                 w.configure(yscrollcommand=sb.set)
                 w.grid(row=0, column=0); sb.grid(row=0, column=1, sticky="ns")
-                box.grid(row=i, column=1, sticky="w")
+                box.grid(row=row, column=lcol + 1, sticky="w")
             else:
                 v = tk.StringVar(); w = ttk.Entry(form, textvariable=v, width=60 if (name, f) in WIDE else 30)
             if not isinstance(v, TextVar):
-                w.grid(row=i, column=1, sticky="w")
+                w.grid(row=row, column=lcol + 1, sticky="w")
             self.vars[f], self.widgets[f] = v, w
             self.attach_help(w, name, f)
         if name == "Dropdown":
@@ -535,7 +538,7 @@ class PanelForm(ttk.Frame):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(LABEL); self.geometry("820x780")
+        self.title("Log Cabin"); self.geometry("1100x900")
         self.db = DB()
         nav = ttk.Frame(self); nav.pack(fill="x")
         self.body = ttk.Frame(self); self.body.pack(fill="both", expand=True)
