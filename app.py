@@ -5,7 +5,9 @@ from tkinter import filedialog, messagebox, ttk
 
 from db import (COLUMNS, DB, FIELDS, FILE_BUTTONS, FILTER_FIELDS, NAV_RECORD, PANEL_CASE_FIELD, PANEL_CASES,
                 PANEL_SELECTION_FIELD, RETAIN, sort_rows)
+from patternwin import LogCabinWindow
 from planner import plan_cases, cut_list, part_label
+from tooltip import Tip
 from printing import print_plan, render_manual_html, open_for_print, manual_blocks
 from version import LABEL, VERSION
 
@@ -25,23 +27,6 @@ FILTER_LAYOUT = (   # Fabric filter widgets: (key, label, width) per row
     (("LengthMin", "Length min", 7), ("LengthMax", "max", 7), ("WidthMin", "Width min", 7), ("WidthMax", "max", 7)),
 )
 WIDE = {("Helptext", "HoverText"), ("Helptext", "FullText")}
-
-
-class Tip:
-    def __init__(self, w, text):
-        self.w, self.text, self.t = w, text, None
-        w.bind("<Enter>", self.show, add="+"); w.bind("<Leave>", self.hide, add="+")
-
-    def show(self, _):
-        if not self.text or self.t:
-            return
-        self.t = tk.Toplevel(self.w); self.t.wm_overrideredirect(True)
-        self.t.geometry(f"+{self.w.winfo_rootx() + 10}+{self.w.winfo_rooty() + self.w.winfo_height()}")
-        tk.Label(self.t, text=self.text, background="#ffffe0", relief="solid", borderwidth=1).pack()
-
-    def hide(self, _):
-        if self.t:
-            self.t.destroy(); self.t = None
 
 
 class TextVar:
@@ -559,6 +544,9 @@ class App(tk.Tk):
         for n in self.forms:
             b = ttk.Button(nav, text=n, command=lambda n=n: self.show(n)); b.pack(side="left", padx=2, pady=2)
             self.nav_tip(b, n)
+        self.log_win = None
+        b = ttk.Button(nav, text="Log Cabin", command=self.show_log_cabin); b.pack(side="left", padx=2, pady=2)
+        self.nav_tip(b, "Log Cabin")
         file_cmds = {"Export CSV": self.export_csv, "Import CSV": self.import_csv, "User Manual": self.show_manual}
         for label in FILE_BUTTONS:
             b = ttk.Button(nav, text=label, command=file_cmds[label]); b.pack(side="right", padx=2, pady=2)
@@ -570,6 +558,12 @@ class App(tk.Tk):
         from_tip = Tip(b, hover)
         b.bind("<F1>", lambda e: messagebox.showinfo(label, full or hover or "No help."))
         return from_tip
+
+    def show_log_cabin(self):
+        if self.log_win is None or not self.log_win.winfo_exists():
+            self.log_win = LogCabinWindow(self, self.db)
+        self.log_win.deiconify()
+        self.log_win.lift()
 
     def show_manual(self):
         hover, full = self.db.helptext(NAV_RECORD, "User Manual")

@@ -1,10 +1,13 @@
 """Data layer for QuiltBack. Fabric, DropDown, HelpText, Selection and CSV come from utilfuncs;
 PANEL and CUTPLAN are QuiltBack-only tables kept in the same database."""
 import json
+import sqlite3
 
 from utilfuncs import csvio, dropdown, fabric, helptext, selection
 from utilfuncs.db import connect
 from utilfuncs.validation import ValidationError
+
+import logcabin
 
 RECORDS = ["Fabric", "Dropdown", "Helptext"]   # maintenance screens
 TABLES = {"Fabric": "Fabric", "Dropdown": "DropDown", "Helptext": "HelpText"}
@@ -32,7 +35,7 @@ PANEL_SELECTION_FIELD = "Selection"   # Panel page dropdown: saved selection use
 PANEL_CASE_FIELD = "Case"   # Panel page layout choice: symmetric (equal cells) or variable (strips)
 PANEL_CASES = ["Symmetric", "Variable"]
 NAV_RECORD = "Navigation"   # TableName for the screen-switching buttons (label = screen name)
-NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext"]
+NAV_BUTTONS = ["Fabric", "Panel", "Dropdown", "Helptext", "Log Cabin"]
 FILE_BUTTONS = ["Export CSV", "Import CSV", "User Manual"]   # top-bar buttons: CSV transfer and manual
 RETAIN = {   # fields kept after Add/Update (the rest reset to blank or default)
     "Fabric": {"Color", "Shade", "Pattern", "Type", "Grain", "Length", "Width"},
@@ -40,7 +43,27 @@ RETAIN = {   # fields kept after Add/Update (the rest reset to blank or default)
     "Helptext": {"TableName", "FieldName"},
 }
 
+LOG_RECORD = "LogCabin"   # HelpText TableName for the Log Cabin window
+LOG_FIELDS = ["PatternName", "Variation", "CentreSize", "CentreColor", "SeamAllowance",
+              "StripSide", "StripColor", "StripWidth", "Rings", "BlocksAcross", "BlocksDown"]
+LOG_BUTTONS = ["Save Pattern", "New Pattern", "Delete Pattern", "Load Pattern", "Fill Strips", "Add Strip",
+               "Remove Strip", "Move Up", "Move Down", "Show Cut List", "Quilt Summary"]
+LOG_LISTS = {   # DropDown choices for the Log Cabin window: (TableName, FieldName) -> (items, default)
+    ("LogPattern", "Variation"): (list(logcabin.VARIATIONS), "Classic"),
+    ("LogStrip", "Side"): (list(logcabin.SIDES), None),
+    ("LogStrip", "Color"): (list(logcabin.COLORS), None),
+}
+
 LOCAL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS LogPattern(
+  ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, PatternName TEXT NOT NULL UNIQUE,
+  Variation TEXT NOT NULL DEFAULT 'Other', CentreSize REAL NOT NULL CHECK (CentreSize > 0),
+  CentreColor TEXT NOT NULL DEFAULT '', SeamAllowance REAL NOT NULL DEFAULT 0.25 CHECK (SeamAllowance >= 0));
+CREATE TABLE IF NOT EXISTS LogStrip(
+  ID INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+  PatternID INTEGER NOT NULL REFERENCES LogPattern(ID) ON DELETE CASCADE,
+  StripNo INTEGER NOT NULL CHECK (StripNo >= 1), Side TEXT NOT NULL, Color TEXT NOT NULL,
+  Width REAL NOT NULL CHECK (Width > 0), UNIQUE (PatternID, StripNo));
 CREATE TABLE IF NOT EXISTS PANEL(ID INTEGER PRIMARY KEY AUTOINCREMENT, PANELNAME TEXT NOT NULL,
   SEAMALLOWANCE REAL NOT NULL DEFAULT 0.25, LENGTH REAL NOT NULL, WIDTH REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS CUTPLAN(ID INTEGER PRIMARY KEY AUTOINCREMENT, PANELID INTEGER, PLAN TEXT NOT NULL,
@@ -58,6 +81,7 @@ def helptext_pairs():
     pairs += [("Fabric", f) for f in FABRIC_SET_FIELDS]
     pairs += [("Panel", PANEL_SELECTION_FIELD), ("Panel", PANEL_CASE_FIELD)] + [("Panel", c) for c in PANEL_CASES]
     pairs += [(NAV_RECORD, b) for b in NAV_BUTTONS + FILE_BUTTONS]
+    pairs += [(LOG_RECORD, f) for f in LOG_FIELDS] + [(LOG_RECORD, b) for b in LOG_BUTTONS]
     return list(dict.fromkeys(pairs))
 
 
@@ -85,6 +109,7 @@ class DB:
         self.c = connect(path)
         self.c.executescript(LOCAL_SCHEMA)
         dropdown.seed(self.c)
+        dropdown.seed(self.c, LOG_LISTS)
         helptext.seed(self.c, extra_items=helptext_pairs())
 
     # records (Fabric, Dropdown, Helptext)
@@ -228,6 +253,66 @@ class DB:
             self.c.execute("UPDATE Fabric SET Length=?, SqIn=?, Use=? WHERE ID=?",
                            (left, round(left * f["Width"], 3), 1 if left > 0 else 0, cut["fabric_id"]))
         self.c.execute("UPDATE CUTPLAN SET APPROVED=1 WHERE ID=?", (plan_id,))
+        self.c.commit()
+
+    # Log Cabin patterns: a LogPattern header and its LogStrip rows, in strip order
+    def log_choices(self, table, field):
+        return dropdown.get_list(self.c, table, field)
+
+    def log_default(self, table, field):
+        return dropdown.get_default(self.c, table, field) or ""
+
+    def log_clean(self, header, strips):
+        """Validate a pattern against the DropDown choices; returns (header, strips) or raises ValidationError."""
+        return logcabin.validate(header, strips, variations=self.log_choices("LogPattern", "Variation"),
+                                 sides=self.log_choices("LogStrip", "Side"),
+                                 colors=self.log_choices("LogStrip", "Color"))
+
+    def log_patterns(self):
+        return [dict(r) for r in self.c.execute(
+            "SELECT P.*, (SELECT COUNT(*) FROM LogStrip S WHERE S.PatternID = P.ID) AS Strips "
+            "FROM LogPattern P ORDER BY PatternName")]
+
+    def log_pattern(self, pattern_id):
+        """Header (with ID) and ordered strips (Side, Color, Width) of one saved pattern."""
+        head = self.c.execute("SELECT * FROM LogPattern WHERE ID=?", (pattern_id,)).fetchone()
+        if head is None:
+            raise ValueError(f"ID: no LogPattern row with ID {pattern_id}")
+        strips = [dict(r) for r in self.c.execute(
+            "SELECT Side, Color, Width FROM LogStrip WHERE PatternID=? ORDER BY StripNo", (pattern_id,))]
+        return dict(head), strips
+
+    def save_log_pattern(self, pattern_id, header, strips):
+        """Insert (pattern_id None) or replace a pattern and all its strips in one transaction. Returns its ID."""
+        header, strips = self.log_clean(header, strips)
+        clash = self.c.execute("SELECT ID FROM LogPattern WHERE PatternName=?",
+                               (header["PatternName"],)).fetchone()
+        if clash and clash["ID"] != pattern_id:
+            raise ValidationError("PatternName", f"'{header['PatternName']}' already exists")
+        try:
+            if pattern_id is None:
+                pattern_id = self.c.execute(
+                    "INSERT INTO LogPattern(PatternName,Variation,CentreSize,CentreColor,SeamAllowance) "
+                    "VALUES(:PatternName,:Variation,:CentreSize,:CentreColor,:SeamAllowance)", header).lastrowid
+            else:
+                cur = self.c.execute(
+                    "UPDATE LogPattern SET PatternName=:PatternName,Variation=:Variation,CentreSize=:CentreSize,"
+                    "CentreColor=:CentreColor,SeamAllowance=:SeamAllowance WHERE ID=:ID", {**header, "ID": pattern_id})
+                if not cur.rowcount:
+                    raise ValueError(f"ID: no LogPattern row with ID {pattern_id}")
+                self.c.execute("DELETE FROM LogStrip WHERE PatternID=?", (pattern_id,))
+            self.c.executemany(
+                "INSERT INTO LogStrip(PatternID,StripNo,Side,Color,Width) VALUES(?,?,?,?,?)",
+                [(pattern_id, n, s["Side"], s["Color"], s["Width"]) for n, s in enumerate(strips, start=1)])
+            self.c.commit()
+        except (ValueError, sqlite3.Error):
+            self.c.rollback()
+            raise
+        return pattern_id
+
+    def delete_log_pattern(self, pattern_id):
+        """Delete a pattern; its strips go with it (ON DELETE CASCADE)."""
+        self.c.execute("DELETE FROM LogPattern WHERE ID=?", (pattern_id,))
         self.c.commit()
 
     # CSV: one file with every row of every table (utilfuncs csvio, '~' delimited)
