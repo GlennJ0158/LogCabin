@@ -9,7 +9,7 @@ from patternwin import LogCabinWindow
 from planner import plan_cases, cut_list, part_label
 from tooltip import Tip
 from printing import print_plan, render_manual_html, open_for_print, manual_blocks
-from version import LABEL, VERSION
+from version import VERSION
 
 ALL_FABRICS = "All fabric records"
 BOOL = {"Use", "Def", "RT"}
@@ -27,6 +27,9 @@ FILTER_LAYOUT = (   # Fabric filter widgets: (key, label, width) per row
     (("LengthMin", "Length min", 7), ("LengthMax", "max", 7), ("WidthMin", "Width min", 7), ("WidthMax", "max", 7)),
 )
 WIDE = {("Helptext", "HoverText"), ("Helptext", "FullText")}
+FILTER_COLOR = "#fffde7"      # very light yellow
+SELECTION_COLOR = "#e8f4fd"   # very light blue
+FIELD_LABELS = {"Fabric": {"FabricName": "Fabric Name"}}   # display labels; field keys are unchanged
 
 
 class TextVar:
@@ -74,7 +77,9 @@ class RecordForm(ttk.Frame):
         self.shown_count = 0
         form = ttk.Frame(self); form.pack(fill="x", padx=8, pady=8)
         for i, f in enumerate(self.fields):
-            ttk.Label(form, text=f).grid(row=i, column=0, sticky="e", padx=4, pady=2)
+            row, pair = divmod(i, 3) if name == "Fabric" else (i, 0)   # Fabric: three label/field pairs per row
+            lcol = 2 * pair
+            ttk.Label(form, text=FIELD_LABELS.get(name, {}).get(f, f)).grid(row=row, column=lcol, sticky="e", padx=4, pady=2)
             if f in BOOL:
                 v = tk.BooleanVar(value=BOOL_DEFAULT.get(f, False)); w = ttk.Checkbutton(form, variable=v)
             elif f in CHOICE_FIELDS.get(name, ()):
@@ -85,11 +90,11 @@ class RecordForm(ttk.Frame):
                 sb = ttk.Scrollbar(box, orient="vertical", command=w.yview)
                 w.configure(yscrollcommand=sb.set)
                 w.grid(row=0, column=0); sb.grid(row=0, column=1, sticky="ns")
-                box.grid(row=i, column=1, sticky="w")
+                box.grid(row=row, column=lcol + 1, sticky="w")
             else:
                 v = tk.StringVar(); w = ttk.Entry(form, textvariable=v, width=60 if (name, f) in WIDE else 30)
             if not isinstance(v, TextVar):
-                w.grid(row=i, column=1, sticky="w")
+                w.grid(row=row, column=lcol + 1, sticky="w")
             self.vars[f], self.widgets[f] = v, w
             self.attach_help(w, name, f)
         if name == "Dropdown":
@@ -121,15 +126,21 @@ class RecordForm(ttk.Frame):
             messagebox.showerror("Binding error", "\n".join(self.bind_errors))
 
     # Fabric filter and saved selections
+    def tint_section(self, style, color):
+        s = ttk.Style(self)
+        for suffix in (".TFrame", ".TLabel", ".TLabelframe", ".TLabelframe.Label"):
+            s.configure(style + suffix, background=color)
+
     def build_filter(self):
-        box = ttk.LabelFrame(self, text="Filter")
+        self.tint_section("Filter", FILTER_COLOR)
+        box = ttk.LabelFrame(self, text="Filter", style="Filter.TLabelframe")
         box.pack(fill="x", padx=8, pady=4)
         self.fvars = {k: tk.StringVar() for k in FILTER_KEYS}
         self.fvars["Use"].set("Any")
         self.fcombos = {}
         for r, row in enumerate(FILTER_LAYOUT):
             for c, (k, label, width) in enumerate(row):
-                ttk.Label(box, text=label).grid(row=r, column=2 * c, padx=(6, 2), pady=2, sticky="e")
+                ttk.Label(box, text=label, style="Filter.TLabel").grid(row=r, column=2 * c, padx=(6, 2), pady=2, sticky="e")
                 if k in CHOICE_FIELDS["Fabric"]:
                     w = ttk.Combobox(box, textvariable=self.fvars[k], width=width)
                     self.fcombos[k] = w
@@ -141,20 +152,21 @@ class RecordForm(ttk.Frame):
                 w.grid(row=r, column=2 * c + 1, sticky="w", pady=2)
                 w.bind("<Return>", lambda e: self.refresh())
                 self.attach_help(w, self.name, "Filter" + k)
-        btns = ttk.Frame(box)
+        btns = ttk.Frame(box, style="Filter.TFrame")
         btns.grid(row=len(FILTER_LAYOUT), column=0, columnspan=8, sticky="w", pady=4)
         for label, cmd in (("Apply Filter", self.refresh), ("Clear Filter", self.clear_filter),
                            ("Select All Shown", self.select_all), ("Select Highlighted", self.select_highlighted),
                            ("Invert Selection", self.invert_selection)):
             b = ttk.Button(btns, text=label, command=cmd); b.pack(side="left", padx=2)
             self.attach_help(b, self.name, label)
-        self.shown = ttk.Label(btns, text="")
+        self.shown = ttk.Label(btns, text="", style="Filter.TLabel")
         self.shown.pack(side="left", padx=8)
 
     def build_selections(self):
-        box = ttk.LabelFrame(self, text="Save Selection")
+        self.tint_section("Selection", SELECTION_COLOR)
+        box = ttk.LabelFrame(self, text="Save Selection", style="Selection.TLabelframe")
         box.pack(fill="x", padx=8, pady=4)
-        ttk.Label(box, text="Title").grid(row=0, column=0, padx=(6, 2), pady=4)
+        ttk.Label(box, text="Title", style="Selection.TLabel").grid(row=0, column=0, padx=(6, 2), pady=4)
         self.set_title = tk.StringVar()
         entry = ttk.Entry(box, textvariable=self.set_title, width=40)
         entry.grid(row=0, column=1, padx=2, sticky="w")
@@ -162,9 +174,9 @@ class RecordForm(ttk.Frame):
         b = ttk.Button(box, text="Save Selection", command=self.save_selection)
         b.grid(row=0, column=2, padx=6)
         self.attach_help(b, self.name, "Save Selection")
-        named = ttk.LabelFrame(self, text="Named Selection")
+        named = ttk.LabelFrame(self, text="Named Selection", style="Selection.TLabelframe")
         named.pack(fill="x", padx=8, pady=4)
-        ttk.Label(named, text="Named selection").grid(row=0, column=0, padx=(6, 2), pady=4)
+        ttk.Label(named, text="Named selection", style="Selection.TLabel").grid(row=0, column=0, padx=(6, 2), pady=4)
         self.set_combo = ttk.Combobox(named, width=40, state="readonly")
         self.set_combo.grid(row=0, column=1, padx=2, sticky="w")
         self.attach_help(self.set_combo, self.name, "NamedSelection")
@@ -535,7 +547,7 @@ class PanelForm(ttk.Frame):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(LABEL); self.geometry("820x780")
+        self.title("Log Cabin"); self.geometry("1100x900")
         self.db = DB()
         nav = ttk.Frame(self); nav.pack(fill="x")
         self.body = ttk.Frame(self); self.body.pack(fill="both", expand=True)
