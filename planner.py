@@ -11,11 +11,11 @@ def _layout(fab, cw, ch):
     so consumed length = number of strip rows * strip length. Ties on capacity prefer grain running up and down."""
     opts = []
     for rot, along, across in ((False, ch, cw), (True, cw, ch)):
-        per_row = int((fab["WIDTH"] + EPS) // across)
-        n_rows = int((fab["LENGTH"] + EPS) // along)
+        per_row = int((fab["Width"] + EPS) // across)
+        n_rows = int((fab["Length"] + EPS) // along)
         if per_row and n_rows:
             opts.append((rot, per_row, n_rows, along))
-    return max(opts, key=lambda o: (o[1] * o[2], grain_direction(fab["GRAIN"], o[0]) == "v")) if opts else None
+    return max(opts, key=lambda o: (o[1] * o[2], grain_direction(fab["Grain"], o[0]) == "v")) if opts else None
 
 
 def _assign(avail, need_l, need_w, count):
@@ -27,7 +27,7 @@ def _assign(avail, need_l, need_w, count):
         if lay:
             cands.append((f, lay))
     # fewest fabrics first (largest capacity), then least material
-    cands.sort(key=lambda c: (-(c[1][1] * c[1][2]), c[0]["LENGTH"] * c[0]["WIDTH"]))
+    cands.sort(key=lambda c: (-(c[1][1] * c[1][2]), c[0]["Length"] * c[0]["Width"]))
     picks, left = [], count
     for f, (rot, per_row, n_rows, along) in cands:
         if left <= 0:
@@ -44,7 +44,7 @@ def _prepare(panel, fabrics, max_parts):
     max_parts = int(max_parts)
     if max_parts < 1:
         raise ValueError("Maximum parts must be at least 1")
-    return max_parts, [f for f in fabrics if f["USE"]]
+    return max_parts, [f for f in fabrics if f["Use"]]
 
 
 def plan_panel(panel, fabrics, max_parts=None):
@@ -82,7 +82,7 @@ def _plan_grid(panel, avail, max_parts):
             picks = _assign(avail, need_l, need_w, rows * cols)
             if picks is None:
                 continue
-            key = ((rows - 1) + (cols - 1), len(picks), sum(p[3] * p[0]["WIDTH"] for p in picks))
+            key = ((rows - 1) + (cols - 1), len(picks), sum(p[3] * p[0]["Width"] for p in picks))
             if best is None or key < best[0]:
                 best = (key, rows, cols, picks, cl, cw, need_l, need_w)
     if best is None:
@@ -94,8 +94,8 @@ def _plan_grid(panel, avail, max_parts):
             r, c = divmod(i, cols)
             i += 1
             parts.append({"row": r, "col": c, "x": c * cw, "y": r * cl, "w": cw, "h": cl, "fabric_id": f["ID"],
-                          "name": f["NAME"], "grain": grain_direction(f["GRAIN"], rot)})
-            cuts.append({"fabric_id": f["ID"], "name": f["NAME"], "cut_length": nl if not rot else nw,
+                          "name": f["FabricName"], "grain": grain_direction(f["Grain"], rot)})
+            cuts.append({"fabric_id": f["ID"], "name": f["FabricName"], "cut_length": nl if not rot else nw,
                          "cut_width": nw if not rot else nl,
                          "finished_length": cl, "finished_width": cw,
                          "consumed_length": consumed if n == 0 else 0,   # fabric's total, charged once
@@ -113,7 +113,7 @@ def _plan_strips(panel, avail, max_parts):
     rectangles (guillotine splits), in either orientation. Returns a plan or None."""
     sa = panel["SEAMALLOWANCE"]
     pl, pw = panel["LENGTH"], panel["WIDTH"]
-    free0 = [(f["ID"], 0.0, 0.0, float(f["LENGTH"]), float(f["WIDTH"])) for f in avail]
+    free0 = [(f["ID"], 0.0, 0.0, float(f["Length"]), float(f["Width"])) for f in avail]
     fabrics = {f["ID"]: f for f in avail}
     budget = [STRIP_NODE_LIMIT]
 
@@ -132,7 +132,7 @@ def _plan_strips(panel, avail, max_parts):
                     pwc = min(span_x, left + 2 * sa)
                     if pwc - 2 * sa <= EPS:
                         continue
-                    key = (round(pwc, 6), -(A * B), grain_direction(fabrics[fid]["GRAIN"], rot) == "v")
+                    key = (round(pwc, 6), -(A * B), grain_direction(fabrics[fid]["Grain"], rot) == "v")
                     if best is None or key > best[0]:
                         best = (key, idx, rot, pwc)
             if best is None:
@@ -190,9 +190,9 @@ def _plan_strips(panel, avail, max_parts):
         for c, p in enumerate(pieces):
             f = fabrics[p["fid"]]
             parts.append({"row": r, "col": c, "x": x, "y": y, "w": p["fin_w"], "h": p["fin_h"],
-                          "fabric_id": f["ID"], "name": f["NAME"],
-                          "grain": grain_direction(f["GRAIN"], p["rot"])})
-            cut = {"fabric_id": f["ID"], "name": f["NAME"], "cut_length": p["eA"], "cut_width": p["eB"],
+                          "fabric_id": f["ID"], "name": f["FabricName"],
+                          "grain": grain_direction(f["Grain"], p["rot"])})
+            cut = {"fabric_id": f["ID"], "name": f["FabricName"], "cut_length": p["eA"], "cut_width": p["eB"],
                    "finished_length": p["fin_h"], "finished_width": p["fin_w"],
                    "consumed_length": 0, "rotated": p["rot"]}
             if p["fid"] not in charged:
