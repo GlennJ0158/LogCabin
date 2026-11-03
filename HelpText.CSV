@@ -1,0 +1,100 @@
+Table~ID~TableName~FieldName~HoverText~FullText~RT~Use
+HelpText~12~Fabric~FabricName~Name of the fabric~Name of this fabric piece. It appears in the list and is matched by the Filter Name contains box.~0~1
+HelpText~13~Fabric~Color~Fabric colour (choose from the list)~Colour of the fabric. The choices come from the Dropdown screen for table Fabric, field Color.~0~1
+HelpText~14~Fabric~Shade~Fabric shade (choose from the list)~Shade of the fabric. The choices come from the Dropdown screen for table Fabric, field Shade.~0~1
+HelpText~15~Fabric~Pattern~Fabric pattern (choose from the list)~Print or pattern of the fabric. The choices come from the Dropdown screen for table Fabric, field Pattern.~0~1
+HelpText~16~Fabric~Type~Fabric type (choose from the list)~Type of fabric. The choices come from the Dropdown screen for table Fabric, field Type.~0~1
+HelpText~17~Fabric~Grain~Grain direction (choose from the list)~Grain of the fabric. The choices come from the Dropdown screen for table Fabric, field Grain.~0~1
+HelpText~18~Fabric~Length~Fabric length, zero or more~Length of the fabric piece. Must be zero or more. Approving a panel plan subtracts the length it uses.~0~1
+HelpText~19~Fabric~Width~Fabric width, zero or more~Width of the fabric piece. Must be zero or more. SqIn is calculated as Length times Width.~0~1
+HelpText~21~Fabric~Use~On to use this fabric in plans~When on, the fabric can be used in panel plans. Approving a plan that uses up all of the length turns Use off.~0~1
+HelpText~66~Fabric~Add~Add the form as a new fabric record~Saves the form as a new Fabric record. The Fabric Name clears; Color, Shade, Pattern, Type, Grain, Length and Width are kept for the next entry.~0~1
+HelpText~67~Fabric~Update~Apply the form to the selected fabric records~Applies the form values to the records selected in the list.~0~1
+HelpText~68~Fabric~Delete~Delete the selected fabric records~Deletes the fabric records selected in the list from the database.~0~1
+HelpText~69~Fabric~Clear~Clear the form~Empties the form. Choice fields return to their default values.~0~1
+HelpText~70~Dropdown~TableName~Table that owns the choice list (choose from the list)~The table that the choice belongs to, for example Fabric or LogPattern. Choose from the list.~0~1
+HelpText~71~Dropdown~FieldName~Field that owns the choice list (choose from the list)~The field inside the chosen table that this choice belongs to. The list changes with TableName.~0~1
+HelpText~72~Dropdown~ListItem~The choice value shown in the drop-down~A value that appears in the drop-down for this table and field. Required.~0~1
+HelpText~73~Dropdown~Def~On if this is the default choice~When on, this value is selected by default. If several values are on for the same field, an error is shown and the last one wins.~0~1
+HelpText~74~Dropdown~Use~On to show this choice; off to hide it~When off, the value does not appear in drop-down lists.~0~1
+HelpText~75~Dropdown~Add~Add the form as a new choice~Saves the form as a new DropDown row.~0~1
+HelpText~76~Dropdown~Update~Apply the form to the selected choices~Applies the form values to the rows selected in the list.~0~1
+HelpText~77~Dropdown~Delete~Delete the selected choices~Deletes the DropDown rows selected in the list.~0~1
+HelpText~78~Dropdown~Clear~Clear the form~Empties the form. TableName and FieldName are kept for the next entry.~0~1
+HelpText~79~Helptext~TableName~Screen or table the help is for (choose from the list)~The screen or table name, for example Fabric, Panel, Navigation or LogCabin. Choose from the list.~0~1
+HelpText~80~Helptext~FieldName~Field or button the help is for (choose from the list)~The field or button label on that screen. Tool tips and F1 help are found by the TableName and FieldName pair.~0~1
+HelpText~81~Helptext~HoverText~Short tool tip shown when the mouse rests on the control~One-line text shown as the tool tip. Keep it short.~0~1
+HelpText~82~Helptext~FullText~Detailed help shown with F1~Longer help shown when F1 is pressed in the control. Plain text unless RT is on.~0~1
+HelpText~83~Helptext~RT~On if FullText is RTF rich text~When on, FullText is treated as RTF and converted to plain text for display. When off, FullText is shown as typed.~0~1
+HelpText~84~Helptext~Use~On to show this help; off to hide it~Only rows with Use on are shown. When off, the tool tip shows No Tool Tip and F1 shows No help yet.~0~1
+HelpText~85~Helptext~Add~Add the form as new help text~Saves the form as a new HelpText row.~0~1
+HelpText~86~Helptext~Update~Apply the form to the selected help rows~Applies the form values to the HelpText rows selected in the list.~0~1
+HelpText~87~Helptext~Delete~Delete the selected help rows~Deletes the HelpText rows selected in the list.~0~1
+HelpText~88~Helptext~Clear~Clear the form~Empties the form. TableName and FieldName are kept for the next entry.~0~1
+HelpText~89~Panel~PANELNAME~Name of the panel~Name shown on the plan. If left blank, the name Panel is used.~0~1
+HelpText~90~Panel~SEAMALLOWANCE~Seam allowance, default 0.25~Seam allowance taken from each edge. The working size is the panel dimension minus twice this value. Must be zero or more.~0~1
+HelpText~91~Panel~LENGTH~Panel length, must be positive~Length of the finished panel including its seam allowances. Must be greater than zero.~0~1
+HelpText~92~Panel~WIDTH~Panel width, must be positive~Width of the finished panel including its seam allowances. Must be greater than zero.~0~1
+HelpText~93~Panel~MAXPARTS~Most pieces the panel may be cut into~Largest number of parts the plan may use. Build Plan reports an error if no plan fits within this number. Whole number, at least 1.~0~1
+HelpText~94~Panel~Build Plan~Work out the cutting plan for this panel~Builds the plan from the fabrics in the Selection choice. The Symmetric and Variable layouts are enabled only when they fit.~0~1
+HelpText~95~Panel~Save Plan~Save the current plan~Stores the plan built by Build Plan. Saving does not reduce fabric length.~0~1
+HelpText~96~Panel~Approve Plan~Approve the saved plan and reduce fabric length~Marks the plan approved and subtracts the length it uses from each fabric. A plan can be approved only once, and each fabric must have enough length.~0~1
+HelpText~97~Panel~Print Plan~Print the current plan~Opens the current plan for printing.~0~1
+HelpText~98~Fabric~FilterName~Show fabrics whose name contains this text~Case-insensitive text match on Fabric Name. Blank does not restrict the list.~0~1
+HelpText~99~Fabric~FilterColor~Show only this colour~Shows fabrics with this Color. Blank allows any colour.~0~1
+HelpText~100~Fabric~FilterShade~Show only this shade~Shows fabrics with this Shade. Blank allows any shade.~0~1
+HelpText~101~Fabric~FilterPattern~Show only this pattern~Shows fabrics with this Pattern. Blank allows any pattern.~0~1
+HelpText~102~Fabric~FilterType~Show only this type~Shows fabrics with this Type. Blank allows any type.~0~1
+HelpText~103~Fabric~FilterGrain~Show only this grain~Shows fabrics with this Grain. Blank allows any grain.~0~1
+HelpText~104~Fabric~FilterLengthMin~Show fabrics with Length at least this value~Lower limit for Length. Blank does not restrict. Must be a number.~0~1
+HelpText~105~Fabric~FilterLengthMax~Show fabrics with Length at most this value~Upper limit for Length. Blank does not restrict. Must be a number.~0~1
+HelpText~106~Fabric~FilterWidthMin~Show fabrics with Width at least this value~Lower limit for Width. Blank does not restrict. Must be a number.~0~1
+HelpText~107~Fabric~FilterWidthMax~Show fabrics with Width at most this value~Upper limit for Width. Blank does not restrict. Must be a number.~0~1
+HelpText~108~Fabric~FilterUse~Any, Yes or No for the Use setting~Yes shows only records with Use on, No shows only records with Use off, and Any does not restrict.~0~1
+HelpText~109~Fabric~Apply Filter~Show only the fabrics matching the filter~Applies all filter fields together. A record must match every filled-in criterion.~0~1
+HelpText~110~Fabric~Clear Filter~Clear the filter fields~Empties the Filter fields so they no longer restrict the list.~0~1
+HelpText~111~Fabric~Select All Shown~Select every fabric shown in the list~Selects all records currently shown in the list.~0~1
+HelpText~112~Fabric~Select Highlighted~Select the highlighted rows~Selects the rows highlighted in the list.~0~1
+HelpText~113~Fabric~Invert Selection~Swap selected and unselected records~Each shown record changes between selected and not selected.~0~1
+HelpText~114~Fabric~Save Selection~Save the selected fabrics under the Title~Saves the selected fabric records under the name typed in Title. Selection names must be unique.~0~1
+HelpText~115~Fabric~Add to Selection~Add the selected fabrics to the named selection~Adds the selected records to the saved selection chosen in Named selection.~0~1
+HelpText~116~Fabric~Remove From Selection~Remove the selected fabrics from the named selection~Removes the selected records from the saved selection chosen in Named selection.~0~1
+HelpText~117~Fabric~Activate Selection~Show only the fabrics in the named selection~Makes the chosen named selection the one the Fabric list shows.~0~1
+HelpText~118~Fabric~Title~Name for a new saved selection~Name used by Save Selection. It must be unique.~0~1
+HelpText~119~Fabric~NamedSelection~Choose a saved selection~Lists the saved selections. Used by Add to Selection, Remove From Selection and Activate Selection.~0~1
+HelpText~120~Panel~Selection~Fabric set the plan is built from~All fabric records, or one saved selection. Choose one before Build Plan.~0~1
+HelpText~121~Panel~Case~Layout of the plan: Symmetric or Variable~Symmetric splits the panel into equal cells with the fewest seams. Variable uses strips of different sizes. A layout is available only if it fits.~0~1
+HelpText~122~Panel~Symmetric~Equal cell layout~Splits the panel into equal cells with the fewest seams. Disabled when no symmetric layout fits.~0~1
+HelpText~123~Panel~Variable~Strip layout of different sizes~Builds the panel from strips of different sizes. Disabled when no variable layout fits.~0~1
+HelpText~124~Navigation~Fabric~Open the Fabric screen~Shows the fabric inventory: the entry form, the Filter, the selections and the fabric list.~0~1
+HelpText~125~Navigation~Panel~Open the Panel planner~Plans cuts for a panel from the fabric inventory, then prints or approves the plan.~0~1
+HelpText~126~Navigation~Dropdown~Open the Dropdown screen~Maintains the drop-down choice lists used by the other screens.~0~1
+HelpText~127~Navigation~Helptext~Open the Helptext screen~Maintains the tool tips and F1 help for each field and button.~0~1
+HelpText~128~Navigation~Log Cabin~Open the Log Cabin window~Opens a separate window to define, save, load and delete Log Cabin patterns, and to show cut lists and quilt summaries.~0~1
+HelpText~129~Navigation~Export CSV~Save all tables to one CSV file~Writes every row of every table to one file, with a tilde character as the separator. The first column, Table, names the table each row belongs to.~0~1
+HelpText~130~Navigation~Import CSV~Load rows from a file made by Export CSV~Rows are matched by ID. New IDs are added and existing IDs are overwritten. If any row fails, no changes are saved.~0~1
+HelpText~131~Navigation~User Manual~Open the user manual~Shows the user manual, which can be printed.~0~1
+HelpText~132~LogCabin~PatternName~Name of the saved pattern~Name used to save and load the pattern. Saving a different pattern with the same name is refused.~0~1
+HelpText~133~LogCabin~Variation~Layout style of the block~Classic, Reverse Classic, Courthouse Steps or Other.~0~1
+HelpText~134~LogCabin~CentreSize~Centre square size in inches, greater than zero~Finished size of the centre square. Must be greater than zero.~0~1
+HelpText~135~LogCabin~CentreColor~Colour of the centre square~Free text describing the centre square colour. Optional.~0~1
+HelpText~136~LogCabin~SeamAllowance~Seam allowance in inches, default 0.25~Seam allowance added to every edge when cut sizes are shown. Must be zero or more.~0~1
+HelpText~137~LogCabin~BlockWidth~Finished block width in inches~Finished width of the block. The strips must close exactly to this size.~0~1
+HelpText~138~LogCabin~BlockLength~Finished block length in inches~Finished length of the block. The strips must close exactly to this size. A non-square block asks for confirmation when saved.~0~1
+HelpText~139~LogCabin~StripSide~Side where the strip is sewn (choose from the list)~Right, Bottom, Left or Top. Strips are sewn in order around the centre square.~0~1
+HelpText~140~LogCabin~StripColor~Colour of the strip (choose from the list)~Light or Dark. The colour is used when the strip is added.~0~1
+HelpText~141~LogCabin~StripWidth~Width of the strip in inches~Finished width of the strip. Used by Add Strip and by Fill Strips for each ring.~0~1
+HelpText~142~LogCabin~Rings~Number of rings to generate~How many rings Fill Strips creates around the centre. Whole number, up to 50.~0~1
+HelpText~143~LogCabin~BlocksAcross~Blocks across the quilt~Number of identical blocks across the quilt, used by Quilt Summary.~0~1
+HelpText~144~LogCabin~BlocksDown~Blocks down the quilt~Number of identical blocks down the quilt, used by Quilt Summary.~0~1
+HelpText~145~LogCabin~Save Pattern~Save the pattern and its strips~Saves the pattern header and all of its strips. A non-square block asks for confirmation first.~0~1
+HelpText~146~LogCabin~New Pattern~Start a new blank pattern~Clears the form to start a new pattern. Save first to keep the current one.~0~1
+HelpText~147~LogCabin~Delete Pattern~Delete the selected saved pattern~Deletes the pattern and all of its strips.~0~1
+HelpText~148~LogCabin~Load Pattern~Load the selected saved pattern~Fills the form and strips from the pattern selected in Saved patterns.~0~1
+HelpText~149~LogCabin~Fill Strips~Generate rings of strips around the centre~Creates strips for the number of Rings, using StripWidth and the chosen Variation: Classic, Reverse Classic or Courthouse Steps.~0~1
+HelpText~150~LogCabin~Add Strip~Add a strip at the end of the order~Adds a strip using Side, Color and Width. It is sewn after the strips above it.~0~1
+HelpText~151~LogCabin~Remove Strip~Remove the selected strip~Deletes the strip selected in the Strips list.~0~1
+HelpText~152~LogCabin~Move Up~Move the selected strip one place earlier~Moves the selected strip one place earlier in the sewing order.~0~1
+HelpText~153~LogCabin~Move Down~Move the selected strip one place later~Moves the selected strip one place later in the sewing order.~0~1
+HelpText~154~LogCabin~Show Cut List~Show finished and cut sizes for each strip~Lists finished sizes and cut sizes. The seam allowance is added to every edge for the cut sizes.~0~1
+HelpText~155~LogCabin~Quilt Summary~Total a grid of identical blocks~Uses Blocks across and Blocks down to give the finished quilt size.~0~1
